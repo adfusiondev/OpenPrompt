@@ -389,7 +389,7 @@ async function resolveShortUrl(url){
   }
 }
 
-async function extractSerpAPI(url, apiKey){
+async function extractSerpAPI(url, apiKey, budgetMs = 12000){
   try {
     logLine('🎯 Layer 1: SerpAPI...', 'info');
     const parsed = parseMapsUrl(url);
@@ -417,9 +417,12 @@ async function extractSerpAPI(url, apiKey){
     ];
 
     let searchData = null;
+    const t0 = Date.now();
     for (let i = 0; i < proxies.length; i++) {
+      const leftMs = budgetMs - (Date.now() - t0);
+      if (leftMs < 3000) { logLine('  ⊘ Out of layer time budget', 'warn'); break; }
       try {
-        const r = await fetch(proxies[i](serpUrl), { signal: AbortSignal.timeout(12000) });
+        const r = await fetch(proxies[i](serpUrl), { signal: AbortSignal.timeout(Math.min(10000, leftMs)) });
         if (!r.ok) continue;
         const text = await r.text();
         searchData = JSON.parse(text);
@@ -492,17 +495,19 @@ function parseSearchPlace(p){
   };
 }
 
-async function extractGoogleCSE(url, apiKey, cx){
+async function extractGoogleCSE(url, apiKey, cx, partialData = {}, budgetMs = 12000){
   try {
     logLine('🔍 Layer 2: Google Custom Search...', 'info');
     const parsed = parseMapsUrl(url);
-    let query = parsed.name || (parsed.lat ? `business at ${parsed.lat},${parsed.lng}` : '');
+    let query = partialData.name || parsed.name || (parsed.lat ? `business at ${parsed.lat},${parsed.lng}` : '');
     if (!query) { logLine('  ✗ No query to search', 'warn'); return null; }
 
     logLine('  → Query: "' + query + '"', 'info');
+    const knownCtx = [partialData.name, partialData.phone, partialData.address].filter(Boolean).join(' | ');
+    if (knownCtx) logLine('  → Context from earlier layers: ' + knownCtx, 'info');
     const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query + ' clinic phone address')}&num=5`;
 
-    const r = await fetch(searchUrl, { signal: AbortSignal.timeout(15000) });
+    const r = await fetch(searchUrl, { signal: AbortSignal.timeout(Math.min(12000, budgetMs)) });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       logLine('  ✗ Google CSE error: ' + (err.error?.message || r.status), 'err');
@@ -539,7 +544,7 @@ async function extractGoogleCSE(url, apiKey, cx){
   } catch(e) { logLine('Google CSE error: ' + e.message, 'err'); return null; }
 }
 
-async function extractJinaReader(url){
+async function extractJinaReader(url, partialData = {}, budgetMs = 12000){
   try {
     logLine('📖 Layer 3: Jina AI reader...', 'info');
     const r = await fetch('https://r.jina.ai/' + url, {
@@ -547,7 +552,7 @@ async function extractJinaReader(url){
         'Accept': 'text/plain', 'X-Return-Format': 'text',
         'X-No-Cache': 'true', 'X-With-Generated-Alt': 'true'
       },
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(Math.min(12000, budgetMs))
     });
     if (!r.ok) { logLine('  ✗ HTTP ' + r.status, 'warn'); return null; }
     const text = await r.text();
@@ -588,7 +593,7 @@ async function extractJinaReader(url){
   } catch(e) { logLine('Jina error: ' + e.message, 'err'); return null; }
 }
 
-async function extractGeminiAI(url, partialData = {}){
+async function extractGeminiAI(url, partialData = {}, budgetMs = 15000){
   const s = JSON.parse(localStorage.getItem(LS_S)||'{}');
   if(!s.key) { logLine('  ⊘ Layer 4 skipped: no Gemini key', 'warn'); return null; }
   try {
@@ -623,7 +628,7 @@ Return ONLY valid JSON with this exact schema (no markdown, no explanation):
     const res = await callGemini(s.key, {
       contents:[{parts:[{text:prompt}]}],
       generationConfig:{ responseMimeType:'application/json', temperature: 0.2 }
-    });
+    }, Math.min(15000, budgetMs));
 
     if (!res.ok) { logLine('  ✗ Gemini error: ' + res.error, 'err'); return null; }
     logLine('  → Model: ' + res.model, 'info');
@@ -686,6 +691,9 @@ async function analyze(){
 
   logLine('Starting extraction pipeline', 'info');
   logLine(`Config: SerpAPI=${s.serp?'✓':'✗'}, GSE=${s.gapiKey&&s.gse?'✓':'✗'}, Gemini=${s.key?'✓':'✗'}, Jina=${s.jina!==false?'✓':'✗'}`, 'info');
+  const deadline = Date.now() + 45000;
+  const timeLeft = () => deadline - Date.now();
+  const outOfTime = () => timeLeft() < 4000;
 
   const parsed = parseMapsUrl(url);
   client = {
@@ -695,26 +703,37 @@ async function analyze(){
     website_url: '', hours: '', notes: ''
   };
 
-  if(s.serp){
-    const d = await extractSerpAPI(url, s.serp);
+  if(!s.serp) logLine('⚠ Layer 1 skipped: no SerpAPI key', 'warn');
+  else if(outOfTime()) logLine('⚠ Layer 1 skipped: pipeline time budget exhausted', 'warn');
+  else {
+    const d = await extractSerpAPI(url, s.serp, timeLeft());
     if (d) client = mergeData(client, d);
-  } else logLine('⊘ Layer 1 skipped: no SerpAPI key', 'warn');
+  }
 
-  if(s.gapiKey && s.gse && (!client.phone || !client.address)){
-    const d = await extractGoogleCSE(url, s.gapiKey, s.gse);
+  if(!s.gapiKey || !s.gse) logLine('⚠ Layer 2 skipped: no Google CSE keys', 'warn');
+  else if(client.phone && client.address) logLine('⚠ Layer 2 skipped: phone & address already found', 'info');
+  else if(outOfTime()) logLine('⚠ Layer 2 skipped: pipeline time budget exhausted', 'warn');
+  else {
+    const d = await extractGoogleCSE(url, s.gapiKey, s.gse, client, timeLeft());
     if (d) client = mergeData(client, d);
-  } else if (!s.gapiKey) logLine('⊘ Layer 2 skipped: no Google CSE keys', 'warn');
+  }
 
-  if(s.jina !== false && (!client.phone || !client.rating)){
-    const d = await extractJinaReader(url);
+  if(s.jina === false) logLine('⚠ Layer 3 skipped: Jina disabled in Settings', 'warn');
+  else if(client.phone && client.rating) logLine('⚠ Layer 3 skipped: phone & rating already found', 'info');
+  else if(outOfTime()) logLine('⚠ Layer 3 skipped: pipeline time budget exhausted', 'warn');
+  else {
+    const d = await extractJinaReader(url, client, timeLeft());
     if (d) client = mergeData(client, d);
   }
 
   const needsGemini = !client.name || !client.prof || !client.city || !client.phone;
-  if (s.key && needsGemini) {
-    const d = await extractGeminiAI(url, client);
+  if(!s.key) logLine('⚠ Layer 4 skipped: no Gemini key', 'warn');
+  else if(!needsGemini) logLine('✓ All essential data present — Gemini not needed', 'ok');
+  else if(outOfTime()) logLine('⚠ Layer 4 skipped: pipeline time budget exhausted', 'warn');
+  else {
+    const d = await extractGeminiAI(url, client, timeLeft());
     if (d) client = mergeData(client, d);
-  } else if (s.key && !needsGemini) logLine('✓ All essential data present — Gemini not needed', 'ok');
+  }
 
   if (isJunkUrl(client.website_url)) client.website_url = '';
   if(client.website_url) client.website = 'yes';
