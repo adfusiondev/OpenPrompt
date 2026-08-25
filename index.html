@@ -237,9 +237,9 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     </div>
 
     <h2 style="color:var(--info)">🛡 Backend Proxy</h2>
-    <p class="sub" style="font-size:12px">Local Express server (<b>server.js</b>) that attaches your API keys server-side.</p>
+    <p class="sub" style="font-size:12px">Local Express server (<b>server.js</b>) that attaches your API keys server-side. Leave empty on Vercel (same-origin).</p>
     <label>Proxy URL <span id="proxyStatus" class="key-status"></span></label>
-    <input id="set_proxy" class="mono" placeholder="http://localhost:3000" oninput="updateKeyStatus()">
+    <input id="set_proxy" class="mono" placeholder="http://localhost:3000 (or leave blank for same-origin)" oninput="updateKeyStatus()">
     <div class="btn-row">
       <button class="btn small ghost" onclick="testBackend()">🧪 Test connection</button>
     </div>
