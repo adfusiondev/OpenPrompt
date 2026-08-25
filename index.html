@@ -298,7 +298,7 @@ async function apiFetch(path, opts = {}, timeoutMs = 15000){
   }
 }
 
-function isJunkUrl(u){ return !u || /(google\.|goo\.gl|gstatic\.|ggpht\.)/i.test(u); }
+function isJunkUrl(u){ return !u || /(google\.|goo\.gl|gstatic\.|ggpht\.|googleusercontent\.|lh3\.)/i.test(u); }
 
 async function callGemini(body, timeoutMs){
   let lastErr='';
