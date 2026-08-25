@@ -206,7 +206,9 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <pre class="prompt" id="promptOut"></pre>
     <div class="row">
       <button class="btn" onclick="copyCurrent()">⧉ Copy</button>
-      <button class="btn ghost" onclick="downloadCurrent()">↓ Download .md</button>
+      <button class="btn ghost" id="claudeBtn" onclick="copyForClaude()">🤖 Copy for Claude</button>
+      <button class="btn ghost" id="studioBtn" onclick="openInAIStudio()">🎓 Open in AI Studio</button>
+      <button class="btn ghost" onclick="downloadCurrent()">↓ Export full client report</button>
       <button class="btn ghost" id="aiBtn" onclick="aiImprove()">✨ Improve with AI</button>
       <button class="btn ghost" onclick="go(0)">+ New client</button>
     </div>
@@ -216,6 +218,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
   <section id="s4" class="panel hidden">
     <h1>Client History</h1>
     <div class="row" style="margin-top:0;margin-bottom:18px">
+      <input id="histSearch" class="mono" placeholder="🔍 Filter by name or city..." oninput="renderHistory()" style="flex:1;min-width:180px">
       <button class="btn ghost small" onclick="exportAll()">↓ Export all as JSON</button>
     </div>
     <div id="histList"></div>
@@ -315,6 +318,38 @@ async function callGemini(apiKey, body, timeoutMs){
     } catch(e) { lastErr = `${model}: ${e.message}`; }
   }
   return { ok:false, error:lastErr };
+}
+
+const PROF_CATS = [
+  ['dental',     /(dental|dentist|orthodont|\u0623\u0633\u0646\u0627\u0646)/i, 'Dental clinic'],
+  ['beauty',     /(beauty|salon|spa|hair|nail|\u062a\u062c\u0645\u064a\u0644|\u0635\u0627\u0644\u0648\u0646)/i, 'Beauty salon'],
+  ['eye',        /(ophthalm|optic|eye|\u0639\u064a\u0648\u0646|\u0628\u0635\u0631\u064a\u0627\u062a)/i, 'Eye clinic'],
+  ['derma',      /(dermatolog|skin care|\u062c\u0644\u062f\u064a)/i, 'Dermatology clinic'],
+  ['physio',     /(physio|physical therapy|\u0639\u0644\u0627\u062c \u0637\u0628\u064a\u0639\u064a|\u062a\u0623\u0647\u064a\u0644)/i, 'Physiotherapy center'],
+  ['pharmacy',   /(pharmac|\u0635\u064a\u062f\u0644\u064a)/i, 'Pharmacy'],
+  ['veterinary', /(veterinar|\bvet\b|\u0628\u064a\u0637\u0631)/i, 'Veterinary clinic'],
+  ['restaurant', /(restaurant|cafe|coffee|pizza|burger|\u0645\u0637\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0627\u0641\u064a\u0647)/i, 'Restaurant'],
+  ['legal',      /(law|attorney|legal|\u0645\u062d\u0627\u0645)/i, 'Law office'],
+  ['medical',    /(clinic|medical|doctor|hospital|\u0639\u064a\u0627\u062f|\u0637\u0628\u064a\u0628|\u0645\u0633\u062a\u0634\u0641\u0649|\u0645\u0631\u0643\u0632 \u0637\u0628)/i, 'Medical clinic']
+];
+const CAT_LABEL = Object.fromEntries(PROF_CATS.map(([id,,label]) => [id,label]));
+const SERVICES_HINT = {
+  dental: 'dental cleaning & whitening, implants, orthodontics/braces, veneers, pediatric dentistry, emergency care',
+  beauty: 'hair styling & treatment, skin/facial care, nails, makeup, spa packages, membership offers',
+  eye: 'comprehensive eye exams, LASIK & vision correction, glasses & contact lenses, pediatric ophthalmology, dry-eye treatment',
+  derma: 'acne & scar treatment, laser hair removal, skin rejuvenation, mole screening, cosmetic dermatology',
+  physio: 'sports injury rehab, manual therapy, posture correction, post-surgery rehabilitation, home exercise programs',
+  pharmacy: 'medication supply & refills, free health screenings, vaccination, skin/hygiene products, delivery service',
+  veterinary: 'vaccinations, surgery, grooming, emergency care, dental care for pets',
+  restaurant: 'signature dishes & menu highlights, online reservation, delivery/order online, family & group offers, chef specials',
+  legal: 'free initial consultation, contracts & drafting, court representation, corporate legal advice',
+  medical: 'specialist consultations, lab tests & diagnostics, chronic disease follow-up, online appointment booking'
+};
+
+function detectProfessionId(text){
+  if(!text) return null;
+  for(const [id,re] of PROF_CATS) if(re.test(text)) return id;
+  return null;
 }
 
 function go(n){
@@ -738,6 +773,11 @@ async function analyze(){
   if (isJunkUrl(client.website_url)) client.website_url = '';
   if(client.website_url) client.website = 'yes';
 
+  if(!client.prof){
+    const pid = detectProfessionId((client.name||'') + ' ' + url);
+    if(pid){ client.prof = CAT_LABEL[pid]; logLine('🏷 Profession detected: ' + client.prof, 'ok'); }
+  }
+
   $('#f_name').value = client.name || '';
   $('#f_prof').value = client.prof || '';
   $('#f_city').value = client.city || '';
@@ -852,6 +892,7 @@ function buildPrompts(){
     trust:'trusted, calm, clinical', luxury:'luxury, premium',
     friendly:'friendly, warm', modern:'modern, tech-forward'
   }[options.tone];
+  const servicesHint = SERVICES_HINT[detectProfessionId((client.prof||'')+' '+(client.name||''))] || 'top 4-6 core services with short benefit-driven blurbs';
   const WEB = client.website==='no'
     ? 'Client has NO website — this will be their first digital presence.'
     : `Client has a website (${client.website_url}) — build a conversion-focused landing page.`;
@@ -877,7 +918,7 @@ CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
 VISUAL TONE: ${TONE}.
 
-SECTIONS (in order): Hero + trust bar + services + about + reviews + FAQ + location + footer.
+SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location + footer.
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
 OUTPUT: single self-contained HTML/CSS/JS file.`;
 
@@ -920,9 +961,39 @@ function showTab(key, el){
 function copyCurrent(){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>toast('⧉ Copied'));
 }
+function copyForClaude(){
+  navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>{
+    toast('⧉ Copied — opening claude.ai');
+    window.open('https://claude.ai','_blank');
+  });
+}
+function openInAIStudio(){
+  navigator.clipboard.writeText(lastPrompts[currentTab]||'');
+  toast('⧉ Copied — paste in AI Studio');
+  window.open('https://aistudio.google.com','_blank');
+}
 function downloadCurrent(){
-  const md=`# ${client.name} — ${client.prof} | ${client.city}\n\n## Landing Page\n\n${lastPrompts.landing}\n\n## Visual Identity\n\n${lastPrompts.identity}\n\n## Outreach\n\n${lastPrompts.outreach}\n`;
-  dl(`prompt-${(client.name||'client').replace(/[^a-z0-9]/gi,'-').toLowerCase()}.md`, md);
+  const rows = [
+    ['Name', client.name], ['Profession', client.prof], ['City', client.city],
+    ['Phone / WhatsApp', client.phone], ['Rating', client.rating ? `${client.rating} ⭐ (${client.reviews||'?'} reviews)` : ''],
+    ['Website', client.website_url || '(none)'], ['Working hours', client.hours], ['Address', client.address],
+    ['Has website?', client.website], ['Has visual identity?', client.identity], ['Notes', client.notes]
+  ].filter(r => r[1]);
+  const md = [
+    `# ${client.name||'Client'} — Client Report`, '',
+    '## Extracted Data', '',
+    '| Field | Value |', '|---|---|',
+    ...rows.map(([k,v]) => `| ${k} | ${String(v).replace(/\|/g,'\\|')} |`),
+    '', '## Generation Options', '',
+    `- Page language: ${options.lang}`,
+    `- CTA goal: ${options.cta}`,
+    `- Visual tone: ${options.tone}`,
+    '', '## Landing Page Prompt', '', lastPrompts.landing || '(not generated)',
+    '', '## Visual Identity Prompt', '', lastPrompts.identity || '(not generated)',
+    '', '## Outreach Message', '', lastPrompts.outreach || '(not generated)', ''
+  ].join('\n');
+  dl(`openprompt-report-${(client.name||'client').replace(/[^a-z0-9]/gi,'-').toLowerCase()}.md`, md);
+  toast('↓ Report exported');
 }
 function dl(name,text){
   const a=document.createElement('a');
@@ -959,7 +1030,8 @@ function saveOrUpdate(){
   localStorage.setItem(LS_H, JSON.stringify(h));
 }
 function renderHistory(){
-  const h=getHist();
+  const q=($('#histSearch')?.value||'').trim().toLowerCase();
+  const h=getHist().filter(x=>!q || ((x.client.name||'')+' '+(x.client.city||'')).toLowerCase().includes(q));
   $('#histList').innerHTML = h.length ? h.map(x=>`
     <div class="hist-item">
       <div class="info"><b>${x.client.name}</b>
@@ -969,7 +1041,7 @@ function renderHistory(){
         <button class="btn ghost small" onclick="delItem(${x.id})">Delete</button>
       </div>
     </div>`).join('')
-    : '<p class="sub">No saved clients yet.</p>';
+    : `<p class="sub">${q ? 'No clients match your search.' : 'No saved clients yet.'}</p>`;
 }
 function openItem(id){
   const x=getHist().find(v=>v.id===id); if(!x) return;
