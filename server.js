@@ -169,11 +169,14 @@ app.post('/api/gemini', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log('[openprompt-proxy] listening on http://localhost:' + PORT);
-  console.log('[openprompt-proxy] keys configured:', {
-    SERPAPI_KEY: Boolean(process.env.SERPAPI_KEY),
-    GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
-    JINA_API_KEY: Boolean(process.env.JINA_API_KEY)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('[openprompt-proxy] listening on http://localhost:' + PORT);
+    console.log('[openprompt-proxy] keys configured:', {
+      SERPAPI_KEY: Boolean(process.env.SERPAPI_KEY),
+      GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
+      JINA_API_KEY: Boolean(process.env.JINA_API_KEY)
+    });
   });
-});
+}
+module.exports = app;

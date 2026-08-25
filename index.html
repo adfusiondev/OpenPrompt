@@ -281,7 +281,8 @@ const PROXY_DEFAULT='http://localhost:3000';
 
 function apiBase(){
   const u=(getSettings().proxyUrl||'').trim();
-  return u ? u.replace(/\/+$/,'') : PROXY_DEFAULT;
+  if(u) return u.replace(/\/+$/,'');
+  return /^https?:$/.test(location.protocol) ? '' : PROXY_DEFAULT;
 }
 function proxyOfflineMsg(){
   return '\u26a0 Proxy backend offline ('+apiBase()+'). Ensure `npm start` is running.';
