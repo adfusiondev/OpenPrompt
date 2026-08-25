@@ -1,0 +1,19 @@
+{
+  "name": "openprompt-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local API proxy for OpenPrompt - keeps upstream API keys off the browser",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  }
+}

@@ -9,7 +9,7 @@ Thumbs.db
 # Logs
 *.log
 
-# Local env
+# Local env — real keys live here, never commit
 .env
 .env.local
 
@@ -20,6 +20,6 @@ Thumbs.db
 secrets.json
 config.local.json
 
-# Node (if added later)
+# Node backend
 node_modules/
-package-lock.json
+npm-debug.log*
