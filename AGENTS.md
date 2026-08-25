@@ -16,9 +16,10 @@ OpenPrompt — a lead-gen tool that extracts real clinic data from Google Maps U
 - SerpAPI has no CORS support — calls go through a fallback chain of public proxies (corsproxy.io → allorigins → codetabs) in `extractSerpAPI`. Keep that chain intact; Google CSE, Gemini, and Jina are called directly.
 - Extraction pipeline order is SerpAPI → Google CSE → Jina → Gemini, each layer skipped once its target fields are filled, under a 45s total deadline (`deadline`/`outOfTime` in `analyze()`). Merging uses `mergeData`: only non-empty values overwrite. Preserve these semantics when refactoring.
 - Profession detection (`PROF_CATS`/`detectProfessionId`) pre-fills the profession field after extraction and drives the per-specialty services hint in `buildPrompts()`. Keep dental/beauty/etc. ordered before the generic `medical` catch-all regex.
-- Short `maps.app.goo.gl` URLs are resolved via Jina reader (`resolveShortUrl`); `parseMapsUrl` pulls placeId/coords/name/cid out of long Maps URLs and feeds every layer — changes there affect all extraction paths.
+- Short `maps.app.goo.gl` URLs are resolved by `resolveShortUrl()` (called at the top of `analyze()` before parsing; Jina first, then proxy fallbacks scanning for a canonical maps URL); `parseMapsUrl` pulls placeId/coords/name/cid out of long Maps URLs and feeds every layer — changes there affect all extraction paths.
+- `extractGeminiAI()` normalizes Gemini's response key `profession` to the app's `prof` (`normalizeGeminiKeys`) — never read raw Gemini JSON into `mergeData` without it.
 - `isJunkUrl()` is the single gate for rejecting google./goo.gl/gstatic./ggpht. URLs in the website field — use it instead of ad-hoc `includes()` checks.
-- r.jina.ai has started returning 401 for some keyless requests; layers must keep failing gracefully (logged warn + pipeline continues) when that happens.
+- r.jina.ai now 401s many keyless requests. Both Jina call sites send `Authorization: Bearer` when optional `op_settings_v1.jinaKey` is set (`jinaHeaders()`); short-URL resolution falls back to public proxies scanning for a canonical maps URL. All layers must keep failing gracefully (logged warn + pipeline continues).
 
 ## Conventions
 

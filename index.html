@@ -270,8 +270,14 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <label class="toggle">
       <input type="checkbox" id="set_jina" checked>
       <span class="slider"></span>
-      <span>Use Jina AI reader (free, no key required)</span>
+      <span>Use Jina AI reader</span>
     </label>
+    <label>Jina API Key <span id="jinaStatus" class="key-status"></span> <span class="sub" style="font-size:11px">(optional &mdash; r.jina.ai now rejects some keyless requests)</span></label>
+    <input id="set_jinakey" class="mono" placeholder="jina_..." oninput="updateKeyStatus()">
+    <div class="btn-row">
+      <button class="btn small ghost" onclick="testJina()">🧪 Test key</button>
+    </div>
+    <div id="jinaTest"></div>
 
     <div class="row">
       <button class="btn" onclick="saveSettings()">💾 Save all keys</button>
@@ -403,25 +409,64 @@ function parseMapsUrl(url){
   return out;
 }
 
-async function resolveShortUrl(url){
-  if(!url.includes('goo.gl') && !url.includes('maps.app.goo.gl')) return url;
+function getSettings(){
+  try { return JSON.parse(localStorage.getItem(LS_S) || '{}'); } catch(e) { return {}; }
+}
+function jinaHeaders(){
+  const h = { 'Accept': 'text/plain', 'X-Return-Format': 'text' };
+  const k = getSettings().jinaKey;
+  if (k) h['Authorization'] = 'Bearer ' + k;
+  return h;
+}
+
+function findMapsUrl(text){
+  const m = String(text||'').match(/https:\/\/(?:www\.)?google\.[a-z.]+\/maps\/[^\s"'<>)\]]+/);
+  return m ? m[0] : null;
+}
+
+async function resolveShortUrl(url, budgetMs = 15000){
+  if(!url.includes('goo.gl')) return url;
+  const t0 = Date.now();
+  const left = () => budgetMs - (Date.now() - t0);
+  logLine('Resolving short URL...', 'info');
   try {
-    logLine('Resolving short URL via Jina reader...', 'info');
     const r = await fetch('https://r.jina.ai/' + url, {
-      headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text' },
-      signal: AbortSignal.timeout(15000)
+      headers: jinaHeaders(),
+      signal: AbortSignal.timeout(Math.min(10000, left()))
     });
-    const finalUrl = r.url;
-    if (finalUrl && finalUrl.includes('google.com/maps')) {
-      logLine('✓ Resolved → ' + finalUrl.slice(0,80) + '...', 'ok');
-      return finalUrl;
+    if (r.ok) {
+      const t = await r.text();
+      const found = findMapsUrl((r.url||'') + '\n' + t.slice(0, 5000));
+      if (found) {
+        logLine('\u2713 Resolved via Jina \u2192 ' + found.slice(0,80) + '...', 'ok');
+        return found;
+      }
+    } else {
+      logLine('  Jina resolver HTTP ' + r.status + ' \u2014 trying fallback proxies', 'warn');
     }
-    logLine('⚠ Resolver returned a non-Maps URL — falling back to the original link', 'warn');
-    return url;
   } catch(e) {
-    logLine('Short URL resolution failed (' + e.message + ') — falling back to the original link', 'warn');
-    return url;
+    logLine('  Jina resolver failed (' + e.message + ') \u2014 trying fallback proxies', 'warn');
   }
+  const proxies = [
+    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+    u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
+  ];
+  for (const px of proxies) {
+    if (left() < 3000) break;
+    try {
+      const r2 = await fetch(px(url), { signal: AbortSignal.timeout(Math.min(8000, left())) });
+      if (!r2.ok) continue;
+      const body = await r2.text();
+      const found = findMapsUrl(body.slice(0, 40000));
+      if (found) {
+        logLine('\u2713 Resolved via fallback proxy \u2192 ' + found.slice(0,80) + '...', 'ok');
+        return found;
+      }
+    } catch(e) {}
+  }
+  logLine('\u26a0 Could not resolve short URL \u2014 continuing with the original link', 'warn');
+  return url;
 }
 
 async function extractSerpAPI(url, apiKey, budgetMs = 12000){
@@ -583,10 +628,7 @@ async function extractJinaReader(url, partialData = {}, budgetMs = 12000){
   try {
     logLine('📖 Layer 3: Jina AI reader...', 'info');
     const r = await fetch('https://r.jina.ai/' + url, {
-      headers: {
-        'Accept': 'text/plain', 'X-Return-Format': 'text',
-        'X-No-Cache': 'true', 'X-With-Generated-Alt': 'true'
-      },
+      headers: { ...jinaHeaders(), 'X-No-Cache': 'true', 'X-With-Generated-Alt': 'true' },
       signal: AbortSignal.timeout(Math.min(12000, budgetMs))
     });
     if (!r.ok) { logLine('  ✗ HTTP ' + r.status, 'warn'); return null; }
@@ -672,18 +714,24 @@ Return ONLY valid JSON with this exact schema (no markdown, no explanation):
     if (!out) { logLine('  ✗ Empty response', 'warn'); return null; }
 
     try {
-      const data = JSON.parse(out);
+      const data = normalizeGeminiKeys(JSON.parse(out));
       logLine('  ✓ Gemini extracted structured data', 'ok');
       return data;
     } catch(e) {
       const jsonMatch = out.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        try { return JSON.parse(jsonMatch[0]); } catch(e2) {}
+        try { return normalizeGeminiKeys(JSON.parse(jsonMatch[0])); } catch(e2) {}
       }
       logLine('  ✗ Invalid JSON from Gemini', 'err');
       return null;
     }
   } catch(e) { logLine('Gemini error: ' + e.message, 'err'); return null; }
+}
+
+function normalizeGeminiKeys(d){
+  if(d && d.profession && !d.prof) d.prof = d.profession;
+  if(d) delete d.profession;
+  return d;
 }
 
 function mergeData(existing, newData){
@@ -697,7 +745,7 @@ function mergeData(existing, newData){
 }
 
 async function analyze(){
-  const url = $('#f_url').value.trim();
+  let url = $('#f_url').value.trim();
   if(!url){ toast('Please paste a link first'); return; }
   if(!url.includes('google.com/maps') && !url.includes('goo.gl')){
     toast('Please paste a valid Google Maps link'); return;
@@ -725,10 +773,12 @@ async function analyze(){
   }
 
   logLine('Starting extraction pipeline', 'info');
-  logLine(`Config: SerpAPI=${s.serp?'✓':'✗'}, GSE=${s.gapiKey&&s.gse?'✓':'✗'}, Gemini=${s.key?'✓':'✗'}, Jina=${s.jina!==false?'✓':'✗'}`, 'info');
+  logLine(`Config: SerpAPI=${s.serp?'✓':'✗'}, GSE=${s.gapiKey&&s.gse?'✓':'✗'}, Gemini=${s.key?'✓':'✗'}, Jina=${s.jina!==false?'✓':'✗'}${s.jinaKey?' (key)':''}`, 'info');
   const deadline = Date.now() + 45000;
   const timeLeft = () => deadline - Date.now();
   const outOfTime = () => timeLeft() < 4000;
+
+  url = await resolveShortUrl(url, timeLeft());
 
   const parsed = parseMapsUrl(url);
   client = {
@@ -864,6 +914,21 @@ async function testGemini(){
     }
   } catch(e) {
     out.innerHTML = `<div class="test-result err">✗ ${e.message}</div>`;
+  }
+}
+
+async function testJina(){
+  const key = $('#set_jinakey').value.trim();
+  const out = $('#jinaTest');
+  out.innerHTML = '<div class="test-result">Testing...</div>';
+  try {
+    const h = { 'Accept': 'text/plain', 'X-Return-Format': 'text' };
+    if (key) h['Authorization'] = 'Bearer ' + key;
+    const r = await fetch('https://r.jina.ai/https://example.com', { headers: h, signal: AbortSignal.timeout(15000) });
+    if (r.ok) out.innerHTML = '<div class="test-result ok">\u2713 Jina works' + (key ? ' with your key' : ' keyless') + '</div>';
+    else out.innerHTML = '<div class="test-result err">\u2717 HTTP ' + r.status + (r.status === 401 && !key ? ' \u2014 get a free key at jina.ai' : '') + '</div>';
+  } catch(e) {
+    out.innerHTML = '<div class="test-result err">\u2717 ' + e.message + '</div>';
   }
 }
 
@@ -1070,6 +1135,7 @@ function openSettings(){
   $('#set_gse').value = s.gse || '';
   $('#set_key').value = s.key || '';
   $('#set_jina').checked = s.jina !== false;
+  $('#set_jinakey').value = s.jinaKey || '';
   updateKeyStatus();
   const hasAny = s.serp || s.key || (s.gapiKey && s.gse);
   $('#keysWarning').classList.toggle('hidden', hasAny);
@@ -1087,6 +1153,7 @@ function updateKeyStatus(){
   setStatus('gapiKeyStatus', $('#set_gapiKey').value.trim(), s.gapiKey);
   setStatus('gseStatus', $('#set_gse').value.trim(), s.gse);
   setStatus('gemStatus', $('#set_key').value.trim(), s.key);
+  setStatus('jinaStatus', $('#set_jinakey').value.trim(), s.jinaKey);
 }
 function closeSettings(){$('#overlay').classList.remove('open');}
 function saveSettings(){
@@ -1095,7 +1162,8 @@ function saveSettings(){
     gapiKey: $('#set_gapiKey').value.trim(),
     gse: $('#set_gse').value.trim(),
     key: $('#set_key').value.trim(),
-    jina: $('#set_jina').checked
+    jina: $('#set_jina').checked,
+    jinaKey: $('#set_jinakey').value.trim()
   };
   try {
     localStorage.setItem(LS_S, JSON.stringify(data));
