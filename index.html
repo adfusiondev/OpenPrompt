@@ -857,7 +857,7 @@ function buildPrompts(){
     fr_ar_en:'Trilingual (French + Arabic + English) — build a page with three language blocks: French (LTR, Inter font), Arabic (dir=rtl, Tajawal font), and English (LTR, Inter font). Include a language switcher (FR/AR/EN). Each block must contain the full content: hero, services, about, reviews, FAQ, location, footer. All three languages must carry the same clinic name and data. Do NOT just append translations — design each language block as a complete, styled section.'
   }[options.lang];
   const CTA = {
-    whatsapp:`WhatsApp booking — real number: ${client.phone||'[PASTE NUMBER]'}`,
+    whatsapp:`WhatsApp booking — real number: ${client.phone||'[PASTE NUMBER]'}. CRITICAL JS REQUIREMENT: Include a complete, functional <script> tag before </body> that (1) selects the booking form by id or tag, (2) intercepts its submit event with e.preventDefault(), (3) extracts the name, phone, and service fields from the form, (4) builds the message body including the service name and patient name, and (5) opens https://wa.me/${client.phone.replace(/[^0-9]/g,'')||'[PASTE_NUMBER]'}?text={encoded_message} in a new tab via window.open(). Use encodeURIComponent for the text parameter. The script must be fully working production code — NO mock alerts, NO placeholder callbacks, NO console.log stubs. If the form has no id, add one (e.g. id="bookingForm").`,
     call:'Direct phone call with click-to-call',
     booking:'In-page appointment form',
     visit:'Embedded Google Map for directions'
