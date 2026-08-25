@@ -11,11 +11,14 @@ OpenPrompt — a lead-gen tool that extracts real clinic data from Google Maps U
 ## Gotchas inside index.html
 
 - All state is module-level globals: `client`, `options`, `lastPrompts`, `currentTab`, `currentId`. The 5 UI steps are sections `#s0`–`#s4` toggled via `go(n)`; adding a step means touching `go()`, `STEPS`, and the section markup together.
-- **Gemini model name (`gemini-3.6-flash`) is hardcoded in 3 places**: `extractGeminiAI`, `testGemini`, `doImprove`. Update all three or the test button will lie about what production uses.
+- All Gemini traffic must go through `callGemini()` (single entry point with the `GEMINI_MODELS` fallback chain: gemini-3.6-flash → gemini-flash-latest → gemini-2.5-flash; retries next model only on 404/"not available"). Don't call the Gemini REST endpoint directly from call sites.
 - localStorage keys are versioned: `op_history_v1` (LS_H), `op_settings_v1` (LS_S). Bump the version suffix when changing the stored shape, or users get stale/crashing saved data. Legacy `pc_history_v1`/`pc_settings_v5` are auto-migrated once on load by `migrateLegacyKeys()`.
 - SerpAPI has no CORS support — calls go through a fallback chain of public proxies (corsproxy.io → allorigins → codetabs) in `extractSerpAPI`. Keep that chain intact; Google CSE, Gemini, and Jina are called directly.
-- Extraction pipeline order is SerpAPI → Google CSE → Jina → Gemini, each layer skipped once its target fields are filled. Merging uses `mergeData`: only non-empty values overwrite. Preserve these semantics when refactoring `analyze()`.
+- Extraction pipeline order is SerpAPI → Google CSE → Jina → Gemini, each layer skipped once its target fields are filled, under a 45s total deadline (`deadline`/`outOfTime` in `analyze()`). Merging uses `mergeData`: only non-empty values overwrite. Preserve these semantics when refactoring.
+- Profession detection (`PROF_CATS`/`detectProfessionId`) pre-fills the profession field after extraction and drives the per-specialty services hint in `buildPrompts()`. Keep dental/beauty/etc. ordered before the generic `medical` catch-all regex.
 - Short `maps.app.goo.gl` URLs are resolved via Jina reader (`resolveShortUrl`); `parseMapsUrl` pulls placeId/coords/name/cid out of long Maps URLs and feeds every layer — changes there affect all extraction paths.
+- `isJunkUrl()` is the single gate for rejecting google./goo.gl/gstatic./ggpht. URLs in the website field — use it instead of ad-hoc `includes()` checks.
+- r.jina.ai has started returning 401 for some keyless requests; layers must keep failing gracefully (logged warn + pipeline continues) when that happens.
 
 ## Conventions
 
