@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PromptClinic — Landing Page Prompt Generator</title>
+<title>OpenPrompt — Landing Page Prompt Generator</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -114,7 +114,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 <body>
 
 <header>
-  <div class="logo">prompt<span>clinic</span>_</div>
+  <div class="logo">open<span>prompt</span>_</div>
   <nav>
     <button class="btn ghost small" onclick="go(4)">History</button>
     <button class="btn ghost small" onclick="openSettings()">⚙ Settings</button>
@@ -282,7 +282,16 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 
 <script>
 const $=s=>document.querySelector(s);
-const LS_H='pc_history_v1', LS_S='pc_settings_v5';
+const LS_H='op_history_v1', LS_S='op_settings_v1';
+(function migrateLegacyKeys(){
+  try {
+    [['pc_history_v1', LS_H], ['pc_settings_v5', LS_S]].forEach(([o,n]) => {
+      const ov = localStorage.getItem(o);
+      if (ov !== null && localStorage.getItem(n) === null) localStorage.setItem(n, ov);
+      if (ov !== null) localStorage.removeItem(o);
+    });
+  } catch(e) {}
+})();
 let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
 const STEPS=['URL','Data','Options','Results','History'];
 
@@ -957,7 +966,7 @@ function delItem(id){
   localStorage.setItem(LS_H, JSON.stringify(getHist().filter(x=>x.id!==id)));
   renderHistory(); toast('🗑 Deleted');
 }
-function exportAll(){ dl('promptclinic-history.json', JSON.stringify(getHist(),null,2)); }
+function exportAll(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
 
 function openSettings(){
   $('#overlay').classList.add('open');

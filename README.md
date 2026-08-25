@@ -1,8 +1,10 @@
-# 🏥 PromptClinic — Landing Page Prompt Generator
+# 🏥 OpenPrompt — Landing Page Prompt Generator
 
 > مولّد برومبتات احترافية لصفحات الهبوط والهوية البصرية، مبني على بيانات حقيقية مستخرجة من Google Maps.
 >
 > An AI-powered prompt generator that builds production-ready prompts for landing pages and visual identities — using real business data extracted automatically from Google Maps.
+>
+> Formerly known as **PromptClinic**.
 
 ![Status](https://img.shields.io/badge/status-working-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -12,7 +14,7 @@
 
 ## 📖 ما هي هذه الأداة؟
 
-**PromptClinic** هي أداة ويب مجانية تساعدك على توليد برومبتات احترافية جاهزة لبناء صفحات هبوط وهويات بصرية لعملائك (خاصة أصحاب المهن الحرة: أطباء، عيادات تجميل، عيادات أسنان، إلخ).
+**OpenPrompt** هي أداة ويب مجانية تساعدك على توليد برومبتات احترافية جاهزة لبناء صفحات هبوط وهويات بصرية لعملائك (خاصة أصحاب المهن الحرة: أطباء، عيادات تجميل، عيادات أسنان، إلخ).
 
 ### كيف تعمل؟
 1. **تلصق رابط Google Maps** الخاص بأي عيادة
@@ -101,8 +103,8 @@
 ### الطريقة 1: فتح مباشر (الأسهل)
 ```bash
 # 1. حمّل المشروع
-git clone https://github.com/YOUR_USERNAME/promptclinic.git
-cd promptclinic
+git clone https://github.com/YOUR_USERNAME/App.OpenPrompt.git
+cd App.OpenPrompt
 
 # 2. افتح الملف في المتصفح
 # Windows:

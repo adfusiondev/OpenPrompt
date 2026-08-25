@@ -1,6 +1,6 @@
 # AGENTS.md
 
-PromptClinic — a lead-gen tool that extracts real clinic data from Google Maps URLs and generates landing-page/identity/outreach prompts. Entire app lives in **one file**: `index.html` (inline CSS + inline JS). No framework, no build step, no dependencies by design ("HTML + Vanilla JS" stack).
+OpenPrompt — a lead-gen tool that extracts real clinic data from Google Maps URLs and generates landing-page/identity/outreach prompts. Entire app lives in **one file**: `index.html` (inline CSS + inline JS). No framework, no build step, no dependencies by design ("HTML + Vanilla JS" stack).
 
 ## Run / verify
 
@@ -12,7 +12,7 @@ PromptClinic — a lead-gen tool that extracts real clinic data from Google Maps
 
 - All state is module-level globals: `client`, `options`, `lastPrompts`, `currentTab`, `currentId`. The 5 UI steps are sections `#s0`–`#s4` toggled via `go(n)`; adding a step means touching `go()`, `STEPS`, and the section markup together.
 - **Gemini model name (`gemini-3.6-flash`) is hardcoded in 3 places**: `extractGeminiAI`, `testGemini`, `doImprove`. Update all three or the test button will lie about what production uses.
-- localStorage keys are versioned: `pc_history_v1` (LS_H), `pc_settings_v5` (LS_S). Bump the version suffix when changing the stored shape, or users get stale/crashing saved data.
+- localStorage keys are versioned: `op_history_v1` (LS_H), `op_settings_v1` (LS_S). Bump the version suffix when changing the stored shape, or users get stale/crashing saved data. Legacy `pc_history_v1`/`pc_settings_v5` are auto-migrated once on load by `migrateLegacyKeys()`.
 - SerpAPI has no CORS support — calls go through a fallback chain of public proxies (corsproxy.io → allorigins → codetabs) in `extractSerpAPI`. Keep that chain intact; Google CSE, Gemini, and Jina are called directly.
 - Extraction pipeline order is SerpAPI → Google CSE → Jina → Gemini, each layer skipped once its target fields are filled. Merging uses `mergeData`: only non-empty values overwrite. Preserve these semantics when refactoring `analyze()`.
 - Short `maps.app.goo.gl` URLs are resolved via Jina reader (`resolveShortUrl`); `parseMapsUrl` pulls placeId/coords/name/cid out of long Maps URLs and feeds every layer — changes there affect all extraction paths.
