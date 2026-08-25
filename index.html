@@ -294,6 +294,28 @@ const LS_H='op_history_v1', LS_S='op_settings_v1';
 })();
 let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
 const STEPS=['URL','Data','Options','Results','History'];
+const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest','gemini-2.5-flash'];
+
+function isJunkUrl(u){ return !u || /(google\.|goo\.gl|gstatic\.|ggpht\.)/i.test(u); }
+
+async function callGemini(apiKey, body, timeoutMs){
+  let lastErr='';
+  for (const model of GEMINI_MODELS){
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs || 20000)
+      });
+      if (r.ok) return { ok:true, model, data: await r.json() };
+      const t = await r.text();
+      lastErr = `${model}: HTTP ${r.status} — ${t.slice(0,120)}`;
+      if (r.status === 404 || /not found|not available|unsupported|deprecated/i.test(t)) continue;
+      break;
+    } catch(e) { lastErr = `${model}: ${e.message}`; }
+  }
+  return { ok:false, error:lastErr };
+}
 
 function go(n){
   for(let i=0;i<5;i++) $('#s'+i).classList.toggle('hidden', i!==n);
@@ -359,9 +381,10 @@ async function resolveShortUrl(url){
       logLine('✓ Resolved → ' + finalUrl.slice(0,80) + '...', 'ok');
       return finalUrl;
     }
+    logLine('⚠ Resolver returned a non-Maps URL — falling back to the original link', 'warn');
     return url;
   } catch(e) {
-    logLine('Short URL resolver failed: ' + e.message, 'warn');
+    logLine('Short URL resolution failed (' + e.message + ') — falling back to the original link', 'warn');
     return url;
   }
 }
@@ -506,7 +529,7 @@ async function extractGoogleCSE(url, apiKey, cx){
 
     let website = '';
     for (const item of data.items) {
-      if (item.link && !item.link.includes('google.') && !item.link.includes('goo.gl')) {
+      if (item.link && !isJunkUrl(item.link)) {
         website = item.link; break;
       }
     }
@@ -548,7 +571,7 @@ async function extractJinaReader(url){
     const websiteMatch = text.match(/https?:\/\/[^\s\)\]\"\']+/g);
     if (websiteMatch) {
       for (const u of websiteMatch) {
-        if (!u.includes('google.') && !u.includes('goo.gl') && !u.includes('gstatic.') && !u.includes('ggpht.')) {
+        if (!isJunkUrl(u)) {
           website_url = u; break;
         }
       }
@@ -597,23 +620,15 @@ Return ONLY valid JSON with this exact schema (no markdown, no explanation):
   "hours": "working hours summary or empty"
 }`;
 
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${s.key}`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        contents:[{parts:[{text:prompt}]}],
-        generationConfig:{ responseMimeType:'application/json', temperature: 0.2 }
-      })
+    const res = await callGemini(s.key, {
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{ responseMimeType:'application/json', temperature: 0.2 }
     });
 
-    if (!r.ok) {
-      const err = await r.text();
-      logLine('  ✗ Gemini error: ' + err.slice(0, 150), 'err');
-      return null;
-    }
+    if (!res.ok) { logLine('  ✗ Gemini error: ' + res.error, 'err'); return null; }
+    logLine('  → Model: ' + res.model, 'info');
 
-    const j = await r.json();
-    const out = j.candidates?.[0]?.content?.parts?.[0]?.text;
+    const out = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!out) { logLine('  ✗ Empty response', 'warn'); return null; }
 
     try {
@@ -701,9 +716,7 @@ async function analyze(){
     if (d) client = mergeData(client, d);
   } else if (s.key && !needsGemini) logLine('✓ All essential data present — Gemini not needed', 'ok');
 
-  if (client.website_url && (client.website_url.includes('google.com') || client.website_url.includes('goo.gl'))) {
-    client.website_url = '';
-  }
+  if (isJunkUrl(client.website_url)) client.website_url = '';
   if(client.website_url) client.website = 'yes';
 
   $('#f_name').value = client.name || '';
@@ -784,17 +797,11 @@ async function testGemini(){
   if (!key) { out.innerHTML = '<div class="test-result err">No key entered</div>'; return; }
   out.innerHTML = '<div class="test-result">Testing...</div>';
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ contents: [{ parts: [{ text: 'Say "OK" if this works.' }] }], generationConfig: { maxOutputTokens: 10 } }),
-      signal: AbortSignal.timeout(10000)
-    });
-    if (r.ok) {
-      out.innerHTML = '<div class="test-result ok">✓ Key works! Gemini responded</div>';
+    const res = await callGemini(key, { contents: [{ parts: [{ text: 'Say "OK" if this works.' }] }], generationConfig: { maxOutputTokens: 10 } }, 10000);
+    if (res.ok) {
+      out.innerHTML = '<div class="test-result ok">✓ Key works! Responded via ' + res.model + '</div>';
     } else {
-      const j = await r.json();
-      out.innerHTML = `<div class="test-result err">✗ ${j.error?.message || r.status}</div>`;
+      out.innerHTML = `<div class="test-result err">✗ ${res.error}</div>`;
     }
   } catch(e) {
     out.innerHTML = `<div class="test-result err">✗ ${e.message}</div>`;
@@ -915,15 +922,11 @@ async function doImprove(){
   $('#aiStatus').textContent='⏳ Improving...';
   const meta=`Expert Prompt Engineer: improve this prompt for code/design tools. Keep all real data. Add professional detail (hierarchy, microcopy, SEO, accessibility). Return ONLY the improved prompt:\n----\n${lastPrompts[currentTab]}`;
   try{
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${s.key}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:meta}]}]})
-    });
-    const j = await r.json();
-    const out = j.candidates?.[0]?.content?.parts?.[0]?.text;
-    if(out){ lastPrompts[currentTab]=out; $('#promptOut').textContent=out; toast('✨ Improved'); }
-    else $('#aiStatus').textContent='⚠ No response';
-  }catch(e){ $('#aiStatus').textContent='⚠ Failed'; }
+    const res = await callGemini(s.key, {contents:[{parts:[{text:meta}]}]});
+    const out = res.ok ? res.data.candidates?.[0]?.content?.parts?.[0]?.text : null;
+    if(out){ lastPrompts[currentTab]=out; $('#promptOut').textContent=out; $('#aiStatus').textContent=''; toast('✨ Improved via ' + res.model); }
+    else $('#aiStatus').textContent='⚠ ' + String(res.error||'No response').slice(0,80);
+  }catch(e){ $('#aiStatus').textContent='⚠ ' + e.message; }
   btn.disabled=false;
 }
 
