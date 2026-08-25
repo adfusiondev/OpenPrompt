@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PromptClinic — Landing Page Prompt Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#141312; --panel:#1b1a19; --border:#2b2a28;
+  --text:#e8e6e3; --muted:#8a8782; --light:#e8e6e3; --dark:#141312;
+  --ok:#4ade80; --warn:#fbbf24; --err:#f87171; --info:#60a5fa;
+}
+*{box-sizing:border-box; margin:0; padding:0}
+body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+a{color:var(--ok); text-decoration:none}
+a:hover{text-decoration:underline}
+
+header{display:flex; justify-content:space-between; align-items:center;
+  padding:18px 32px; border-bottom:1px solid var(--border)}
+.logo{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:20px; letter-spacing:1px}
+.logo span{color:var(--muted)}
+nav button{margin-inline-start:8px}
+
+main{max-width:960px; margin:0 auto; padding:32px 20px 80px}
+
+.stepper{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:32px}
+.step{background:var(--panel); border:1px solid var(--border); color:var(--muted);
+  padding:8px 16px; border-radius:6px; cursor:pointer; font-size:14px}
+.step.active{background:var(--light); color:var(--dark); border-color:var(--light); font-weight:700}
+
+.panel{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:28px; margin-bottom:20px}
+h1{font-family:'JetBrains Mono',monospace; font-size:26px; margin-bottom:8px}
+h2{font-size:14px; margin-top:22px; margin-bottom:6px}
+.sub{color:var(--muted); margin-bottom:16px; line-height:1.7; font-size:14px}
+
+label{display:block; color:var(--muted); font-size:13px; margin-bottom:6px; margin-top:14px}
+input,select,textarea{width:100%; background:#111; border:1px solid var(--border);
+  color:var(--text); padding:10px 12px; border-radius:6px; font-family:'Inter'; font-size:14px}
+input:focus,select:focus,textarea:focus{outline:none; border-color:var(--muted)}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:0 18px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+
+.btn{background:var(--light); color:var(--dark); border:1px solid var(--light);
+  padding:10px 22px; border-radius:6px; cursor:pointer; font-weight:700; font-size:14px}
+.btn.ghost{background:transparent; color:var(--text); border:1px solid var(--border)}
+.btn.small{padding:6px 14px; font-size:12px; font-weight:500}
+.btn:disabled{opacity:.4; cursor:wait}
+.row{display:flex; gap:10px; flex-wrap:wrap; margin-top:20px}
+
+.status{color:var(--muted); font-size:13px; margin-top:14px; min-height:20px}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.status.err{color:var(--err)}
+
+.tabs{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:16px}
+.tab{background:none; border:none; color:var(--muted); padding:10px 18px; cursor:pointer;
+  font-size:14px; border-bottom:2px solid transparent}
+.tab.active{color:var(--text); border-bottom-color:var(--light)}
+
+pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
+  padding:18px; white-space:pre-wrap; line-height:1.9; font-size:14px; max-height:420px; overflow:auto}
+
+.hist-item{border:1px solid var(--border); border-radius:6px; padding:14px 18px; margin-bottom:10px;
+  display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; background:#111}
+.hist-item .info b{display:block; margin-bottom:4px}
+.hist-item .info span{color:var(--muted); font-size:12px}
+
+#overlay{position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
+#overlay.open{display:flex}
+#overlay .panel{max-width:600px;width:100%;max-height:90vh;overflow:auto}
+#toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--light); color:var(--dark);
+  padding:10px 24px; border-radius:6px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; z-index:60}
+#toast.show{opacity:1}
+.hidden{display:none}
+
+.log{background:#0a0a09; border:1px solid var(--border); border-radius:6px; padding:12px 14px;
+  font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.7; margin-top:14px; max-height:260px; overflow:auto}
+.log div{color:var(--muted)}
+.log .ok{color:var(--ok)}
+.log .warn{color:var(--warn)}
+.log .err{color:var(--err)}
+.log .info{color:var(--text)}
+
+.preview{background:#0a0a09; border:1px solid var(--border); border-radius:6px; padding:14px; margin-top:14px;
+  display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:13px}
+.preview div{display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed #222}
+.preview b{color:var(--muted); font-weight:500; min-width:90px}
+.preview span{color:var(--text); text-align:right; word-break:break-word}
+
+.key-help{background:#1a1f15; border:1px solid #2d3a20; border-radius:6px; padding:10px 14px; margin-top:8px; font-size:12px; color:#8fa878; line-height:1.6}
+.key-status{font-size:11px; padding:4px 10px; border-radius:4px; margin-left:8px; font-weight:600}
+.key-status.saved{background:#2d3a20; color:var(--ok)}
+.key-status.empty{background:#3a2020; color:var(--err)}
+
+.btn-row{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap}
+.test-result{font-size:12px; padding:6px 10px; border-radius:4px; margin-top:6px; font-family:'JetBrains Mono',monospace}
+.test-result.ok{background:#1a2818; color:var(--ok); border:1px solid #2d3a20}
+.test-result.err{background:#2a1818; color:var(--err); border:1px solid #3a2020}
+
+.warning-box{background:#2a1f10; border:1px solid #5a3a18; border-radius:6px; padding:12px 16px; margin-top:16px; color:var(--warn); font-size:13px; line-height:1.6}
+.warning-box b{color:var(--warn)}
+
+.toggle{display:flex; align-items:center; gap:10px; margin-top:12px; cursor:pointer}
+.toggle input{display:none}
+.toggle .slider{width:40px; height:22px; background:#333; border-radius:11px; position:relative; transition:.2s; flex-shrink:0}
+.toggle .slider::after{content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; background:#666; border-radius:50%; transition:.2s}
+.toggle input:checked + .slider{background:#2d3a20}
+.toggle input:checked + .slider::after{left:20px; background:var(--ok)}
+.toggle span{color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">prompt<span>clinic</span>_</div>
+  <nav>
+    <button class="btn ghost small" onclick="go(4)">History</button>
+    <button class="btn ghost small" onclick="openSettings()">⚙ Settings</button>
+  </nav>
+</header>
+
+<main>
+  <div class="stepper" id="stepper"></div>
+
+  <section id="s0" class="panel">
+    <h1>The landing page prompt agent</h1>
+    <p class="sub">Paste a Google Maps link. The agent extracts real business data using multiple free layers (SerpAPI + Google Custom Search + Jina AI reader + Gemini AI) — then builds production-ready prompts for a landing page + visual identity.</p>
+    <label>Google Maps URL</label>
+    <input id="f_url" class="mono" placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/place/...">
+    <div class="row">
+      <button class="btn" id="analyzeBtn" onclick="analyze()">⚡ Extract data</button>
+    </div>
+    <div class="status" id="analyzeStatus"></div>
+    <div class="log hidden" id="log"></div>
+    <div class="preview hidden" id="preview"></div>
+    <div class="row hidden" id="nextRow">
+      <button class="btn" onclick="go(1)">Next: Review data →</button>
+    </div>
+  </section>
+
+  <section id="s1" class="panel hidden">
+    <h1>Review & Edit Data</h1>
+    <p class="sub">Verify the extracted data. Fields marked * are required for high-quality prompts.</p>
+    <div class="grid2">
+      <div><label>Clinic / Doctor name *</label><input id="f_name"></div>
+      <div><label>Profession / Specialty *</label><input id="f_prof" placeholder="e.g. Dental clinic"></div>
+      <div><label>City *</label><input id="f_city"></div>
+      <div><label>Phone / WhatsApp</label><input id="f_phone"></div>
+      <div><label>Google rating ⭐</label><input id="f_rating" placeholder="4.8"></div>
+      <div><label>Number of reviews</label><input id="f_reviews" placeholder="120"></div>
+      <div><label>Website URL</label><input id="f_website_url" class="mono" placeholder="https://..."></div>
+      <div><label>Working hours</label><input id="f_hours" placeholder="Mon-Sat: 9am-8pm"></div>
+      <div><label>Do they have a website?</label>
+        <select id="f_website"><option value="no">No</option><option value="yes">Yes</option></select></div>
+      <div><label>Do they have a visual identity?</label>
+        <select id="f_identity"><option value="no">No</option><option value="yes">Yes</option></select></div>
+    </div>
+    <label>Full address</label><input id="f_address">
+    <label>Notes / strengths (optional)</label>
+    <textarea id="f_notes" rows="2" placeholder="e.g. 15 years of experience, modern laser equipment..."></textarea>
+    <div class="row">
+      <button class="btn" onclick="go(2)">Next: Options →</button>
+      <button class="btn ghost" onclick="go(0)">← Back</button>
+    </div>
+  </section>
+
+  <section id="s2" class="panel hidden">
+    <h1>Generation Options</h1>
+    <div class="grid2">
+      <div><label>Landing page language</label>
+        <select id="o_lang">
+          <option value="en">English</option>
+          <option value="ar">Arabic (RTL)</option>
+          <option value="fr">French</option>
+        </select></div>
+      <div><label>Main conversion goal (CTA)</label>
+        <select id="o_cta">
+          <option value="whatsapp">WhatsApp booking</option>
+          <option value="call">Direct phone call</option>
+          <option value="booking">Appointment form</option>
+          <option value="visit">In-clinic visit</option>
+        </select></div>
+      <div><label>Visual tone</label>
+        <select id="o_tone">
+          <option value="trust">Trusted & clinical</option>
+          <option value="luxury">Luxury & premium</option>
+          <option value="friendly">Friendly & approachable</option>
+          <option value="modern">Modern & tech-forward</option>
+        </select></div>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="generate()"> Generate prompts</button>
+      <button class="btn ghost" onclick="go(1)">← Back</button>
+    </div>
+  </section>
+
+  <section id="s3" class="panel hidden">
+    <h1>Ready-to-use Prompts</h1>
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('landing',this)">Landing Page</button>
+      <button class="tab" onclick="showTab('identity',this)">Visual Identity</button>
+      <button class="tab" onclick="showTab('outreach',this)">Outreach Message</button>
+    </div>
+    <pre class="prompt" id="promptOut"></pre>
+    <div class="row">
+      <button class="btn" onclick="copyCurrent()">⧉ Copy</button>
+      <button class="btn ghost" onclick="downloadCurrent()">↓ Download .md</button>
+      <button class="btn ghost" id="aiBtn" onclick="aiImprove()">✨ Improve with AI</button>
+      <button class="btn ghost" onclick="go(0)">+ New client</button>
+    </div>
+    <div class="status" id="aiStatus"></div>
+  </section>
+
+  <section id="s4" class="panel hidden">
+    <h1>Client History</h1>
+    <div class="row" style="margin-top:0;margin-bottom:18px">
+      <button class="btn ghost small" onclick="exportAll()">↓ Export all as JSON</button>
+    </div>
+    <div id="histList"></div>
+  </section>
+</main>
+
+<div id="overlay">
+  <div class="panel">
+    <h1 style="font-size:18px">⚙ Settings</h1>
+    <p class="sub">Configure your API keys. All options are free. At least one key is required.</p>
+
+    <div id="keysWarning" class="warning-box hidden">
+      <b>⚠ Warning:</b> No API keys are currently saved! If you're in <b>Incognito / Private mode</b>, keys will be lost when you close the tab. Use a normal browser window, or use the Test buttons below to verify each key works.
+    </div>
+
+    <h2 style="color:var(--ok)">🎯 SerpAPI — Best extraction (optional)</h2>
+    <p class="sub" style="font-size:12px">100 free searches/month. Extracts name, phone, address, rating, website, hours.</p>
+    <label>SerpAPI Key <span id="serpStatus" class="key-status"></span></label>
+    <input id="set_serp" class="mono" placeholder="abc123..." oninput="updateKeyStatus()">
+    <div class="btn-row">
+      <button class="btn small ghost" onclick="testSerp()">🧪 Test key</button>
+    </div>
+    <div id="serpTest"></div>
+    <div class="key-help">🔗 Get free key: <a href="https://serpapi.com/manage-api-key" target="_blank">serpapi.com</a> → Sign up → Copy "Your Private API Key"</div>
+
+    <h2 style="color:var(--info); margin-top:22px">🔍 Google Custom Search (optional, powerful)</h2>
+    <p class="sub" style="font-size:12px"><b>100 free queries/day</b> — much more generous than SerpAPI. Needs API key + Search Engine ID (CX).</p>
+    <label>Google API Key <span id="gapiKeyStatus" class="key-status"></span></label>
+    <input id="set_gapiKey" class="mono" placeholder="AIza..." oninput="updateKeyStatus()">
+    <label>Search Engine ID (CX) <span id="gseStatus" class="key-status"></span></label>
+    <input id="set_gse" class="mono" placeholder="a1b2c3d4e5..." oninput="updateKeyStatus()">
+    <div class="btn-row">
+      <button class="btn small ghost" onclick="testGse()">🧪 Test</button>
+    </div>
+    <div id="gseTest"></div>
+    <div class="key-help">🔗 Get free: <a href="https://developers.google.com/custom-search/v1/introduction" target="_blank">Custom Search API</a> + <a href="https://programmablesearchengine.google.com/" target="_blank">create a search engine</a> (turn on "Search the entire web")</div>
+
+    <h2 style="color:var(--warn); margin-top:22px">✨ Gemini AI — Fallback + Improve (recommended)</h2>
+    <p class="sub" style="font-size:12px">Used when other layers fail. Also powers the "Improve with AI" button.</p>
+    <label>Gemini API Key <span id="gemStatus" class="key-status"></span></label>
+    <input id="set_key" class="mono" placeholder="AIza..." oninput="updateKeyStatus()">
+    <div class="btn-row">
+      <button class="btn small ghost" onclick="testGemini()">🧪 Test key</button>
+    </div>
+    <div id="gemTest"></div>
+    <div class="key-help">🔗 Get free key: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key</div>
+
+    <h2 style="color:var(--muted); margin-top:22px">🔧 Extraction Options</h2>
+    <label class="toggle">
+      <input type="checkbox" id="set_jina" checked>
+      <span class="slider"></span>
+      <span>Use Jina AI reader (free, no key required)</span>
+    </label>
+
+    <div class="row">
+      <button class="btn" onclick="saveSettings()">💾 Save all keys</button>
+      <button class="btn ghost" onclick="clearAllKeys()">🗑 Clear all</button>
+      <button class="btn ghost" onclick="closeSettings()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const LS_H='pc_history_v1', LS_S='pc_settings_v5';
+let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
+const STEPS=['URL','Data','Options','Results','History'];
+
+function go(n){
+  for(let i=0;i<5;i++) $('#s'+i).classList.toggle('hidden', i!==n);
+  $('#stepper').innerHTML = STEPS.map((s,i)=>
+    `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
+  if(n===4) renderHistory();
+  window.scrollTo(0,0);
+}
+
+function logLine(msg, type='info'){
+  const log = $('#log');
+  log.classList.remove('hidden');
+  const d = document.createElement('div');
+  d.className = type;
+  const t = new Date().toLocaleTimeString();
+  d.textContent = `[${t}] ${msg}`;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+function clearLog(){ $('#log').innerHTML = ''; $('#log').classList.add('hidden'); }
+
+function showPreview(){
+  const p = $('#preview');
+  p.classList.remove('hidden');
+  $('#nextRow').classList.remove('hidden');
+  const items = [
+    ['Name', client.name],
+    ['Profession', client.prof],
+    ['City', client.city],
+    ['Phone', client.phone],
+    ['Rating', client.rating ? `${client.rating} ⭐` : '—'],
+    ['Reviews', client.reviews || '—'],
+    ['Website', client.website_url || '—'],
+    ['Hours', client.hours || '—'],
+    ['Address', client.address || '—']
+  ];
+  p.innerHTML = items.map(([k,v])=>`<div><b>${k}</b><span>${v||'—'}</span></div>`).join('');
+}
+
+function parseMapsUrl(url){
+  const out = { placeId: null, name: null, lat: null, lng: null, cid: null };
+  const placeMatch = url.match(/\/place\/([^/@?]+)/);
+  if(placeMatch) out.name = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
+  const coordMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if(coordMatch){ out.lat = parseFloat(coordMatch[1]); out.lng = parseFloat(coordMatch[2]); }
+  const pidMatch = url.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+  if(pidMatch) out.placeId = pidMatch[1];
+  const cidMatch = url.match(/[?&]cid=(\d+)/);
+  if(cidMatch) out.cid = cidMatch[1];
+  return out;
+}
+
+async function resolveShortUrl(url){
+  if(!url.includes('goo.gl') && !url.includes('maps.app.goo.gl')) return url;
+  try {
+    logLine('Resolving short URL via Jina reader...', 'info');
+    const r = await fetch('https://r.jina.ai/' + url, {
+      headers: { 'Accept': 'text/plain', 'X-Return-Format': 'text' },
+      signal: AbortSignal.timeout(15000)
+    });
+    const finalUrl = r.url;
+    if (finalUrl && finalUrl.includes('google.com/maps')) {
+      logLine('✓ Resolved → ' + finalUrl.slice(0,80) + '...', 'ok');
+      return finalUrl;
+    }
+    return url;
+  } catch(e) {
+    logLine('Short URL resolver failed: ' + e.message, 'warn');
+    return url;
+  }
+}
+
+async function extractSerpAPI(url, apiKey){
+  try {
+    logLine('🎯 Layer 1: SerpAPI...', 'info');
+    const parsed = parseMapsUrl(url);
+    let serpUrl = null;
+
+    if (parsed.placeId) {
+      logLine('  → Using place_id from URL', 'info');
+      serpUrl = `https://serpapi.com/search.json?engine=google_maps&type=place&place_id=${encodeURIComponent(parsed.placeId)}&hl=en&api_key=${apiKey}`;
+    } else if (parsed.lat !== null) {
+      logLine('  → Searching by coordinates', 'info');
+      const ll = `@${parsed.lat},${parsed.lng},17z`;
+      serpUrl = `https://serpapi.com/search.json?engine=google_maps&ll=${encodeURIComponent(ll)}&type=search&hl=en&google_domain=google.com&api_key=${apiKey}`;
+    } else if (parsed.name) {
+      logLine('  → Searching by place name', 'info');
+      serpUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(parsed.name)}&hl=en&google_domain=google.com&api_key=${apiKey}`;
+    } else {
+      logLine('  ✗ Cannot build SerpAPI query', 'warn');
+      return null;
+    }
+
+    const proxies = [
+      u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+      u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
+    ];
+
+    let searchData = null;
+    for (let i = 0; i < proxies.length; i++) {
+      try {
+        const r = await fetch(proxies[i](serpUrl), { signal: AbortSignal.timeout(12000) });
+        if (!r.ok) continue;
+        const text = await r.text();
+        searchData = JSON.parse(text);
+        if (searchData && !searchData.error) break;
+      } catch(e) {}
+    }
+
+    if (!searchData) { logLine('  ✗ All proxies failed', 'err'); return null; }
+    if (searchData.error) { logLine('  ✗ SerpAPI error: ' + searchData.error, 'err'); return null; }
+
+    if (searchData.place_results) {
+      logLine('  ✓ Got direct place details', 'ok');
+      return parsePlaceDetails(searchData.place_results);
+    }
+
+    const places = searchData.local_results?.places || searchData.local_results || [];
+    if (!Array.isArray(places) || places.length === 0) {
+      logLine('  ✗ No local results', 'warn');
+      return null;
+    }
+
+    let target = null;
+    if (parsed.placeId) target = places.find(p => p.place_id === parsed.placeId);
+    if (!target && parsed.name) {
+      const lower = parsed.name.toLowerCase();
+      target = places.find(p => p.title && p.title.toLowerCase().includes(lower));
+    }
+    if (!target && parsed.lat !== null) {
+      let best = null, bestDist = Infinity;
+      for (const p of places) {
+        if (p.gps_coordinates) {
+          const d = Math.hypot(parsed.lat - p.gps_coordinates.latitude, parsed.lng - p.gps_coordinates.longitude);
+          if (d < bestDist) { bestDist = d; best = p; }
+        }
+      }
+      target = best;
+    }
+    if (!target) target = places[0];
+
+    logLine('  ✓ Found: ' + (target.title || 'unknown'), 'ok');
+    return parseSearchPlace(target);
+  } catch(e) { logLine('SerpAPI error: ' + e.message, 'err'); return null; }
+}
+
+function parsePlaceDetails(p){
+  let hours = '';
+  if (p.opening_hours) {
+    hours = Array.isArray(p.opening_hours)
+      ? p.opening_hours.slice(0,3).join(' | ')
+      : Object.entries(p.opening_hours).slice(0,3).map(([d,h])=>`${d}: ${h}`).join(' | ');
+  }
+  let city = '';
+  const addr = p.address || '';
+  const parts = addr.split(',').map(s=>s.trim());
+  if (parts.length >= 2) city = parts[parts.length - 2] || '';
+  return {
+    name: p.title || p.name || '', prof: p.type || p.category || '',
+    city, phone: p.phone || '', website_url: p.website || '',
+    rating: p.rating ? String(p.rating) : '', reviews: p.reviews ? String(p.reviews) : '',
+    address: p.address || '', hours
+  };
+}
+
+function parseSearchPlace(p){
+  return {
+    name: p.title || p.name || '', prof: p.type || p.category || '',
+    phone: p.phone || '', website_url: p.website || '',
+    rating: p.rating ? String(p.rating) : '', reviews: p.reviews ? String(p.reviews) : '',
+    address: p.address || '', hours: '', city: ''
+  };
+}
+
+async function extractGoogleCSE(url, apiKey, cx){
+  try {
+    logLine('🔍 Layer 2: Google Custom Search...', 'info');
+    const parsed = parseMapsUrl(url);
+    let query = parsed.name || (parsed.lat ? `business at ${parsed.lat},${parsed.lng}` : '');
+    if (!query) { logLine('  ✗ No query to search', 'warn'); return null; }
+
+    logLine('  → Query: "' + query + '"', 'info');
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query + ' clinic phone address')}&num=5`;
+
+    const r = await fetch(searchUrl, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      logLine('  ✗ Google CSE error: ' + (err.error?.message || r.status), 'err');
+      return null;
+    }
+
+    const data = await r.json();
+    if (!data.items || data.items.length === 0) { logLine('  ✗ No results', 'warn'); return null; }
+
+    const snippets = data.items.map(i => (i.snippet || '') + ' ' + (i.title || '')).join(' ');
+    logLine('  → Got ' + data.items.length + ' results', 'info');
+
+    const phoneMatch = snippets.match(/(\+\d{1,3}[\s\-]?\d{1,4}[\s\-]?\d{1,4}[\s\-]?\d{1,4})/);
+    const phone = phoneMatch ? phoneMatch[1].trim() : '';
+
+    const addrMatch = snippets.match(/(?:address|located at)[:\s]*([A-Za-z0-9\s,\.]{10,80})/i);
+    const address = addrMatch ? addrMatch[1].trim() : (data.items[0]?.snippet || '').slice(0, 80);
+
+    const ratingMatch = snippets.match(/(\d\.\d)\s*(?:star|rating)/i);
+    const rating = ratingMatch ? ratingMatch[1] : '';
+
+    const reviewsMatch = snippets.match(/(\d[\d,]*)\s*(?:review|avis)/i);
+    const reviews = reviewsMatch ? reviewsMatch[1].replace(/,/g, '') : '';
+
+    let website = '';
+    for (const item of data.items) {
+      if (item.link && !item.link.includes('google.') && !item.link.includes('goo.gl')) {
+        website = item.link; break;
+      }
+    }
+
+    logLine('  ✓ Extracted from Google search', 'ok');
+    return { name: parsed.name || '', phone, address, rating, reviews, website_url: website, city: '', prof: '', hours: '' };
+  } catch(e) { logLine('Google CSE error: ' + e.message, 'err'); return null; }
+}
+
+async function extractJinaReader(url){
+  try {
+    logLine('📖 Layer 3: Jina AI reader...', 'info');
+    const r = await fetch('https://r.jina.ai/' + url, {
+      headers: {
+        'Accept': 'text/plain', 'X-Return-Format': 'text',
+        'X-No-Cache': 'true', 'X-With-Generated-Alt': 'true'
+      },
+      signal: AbortSignal.timeout(20000)
+    });
+    if (!r.ok) { logLine('  ✗ HTTP ' + r.status, 'warn'); return null; }
+    const text = await r.text();
+    if (!text || text.length < 100) { logLine('  ✗ Very little content', 'warn'); return null; }
+    logLine(`  → Got ${text.length} chars`, 'ok');
+
+    const phoneMatches = text.match(/[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}/g);
+    let phone = '';
+    if (phoneMatches) {
+      const filtered = phoneMatches.filter(p => p.replace(/\D/g,'').length >= 8 && !p.includes('2026'));
+      if (filtered.length > 0) phone = filtered.sort((a,b) => b.length - a.length)[0].trim();
+    }
+
+    const ratingMatch = text.match(/(\d\.\d)\s*(?:star|rating|out of 5|نجوم)/i);
+    const rating = ratingMatch ? ratingMatch[1] : '';
+
+    const reviewsMatch = text.match(/([\d,]+)\s*(?:review|avis|تقييم|مراجعة)/i);
+    const reviews = reviewsMatch ? reviewsMatch[1].replace(/,/g, '') : '';
+
+    let website_url = '';
+    const websiteMatch = text.match(/https?:\/\/[^\s\)\]\"\']+/g);
+    if (websiteMatch) {
+      for (const u of websiteMatch) {
+        if (!u.includes('google.') && !u.includes('goo.gl') && !u.includes('gstatic.') && !u.includes('ggpht.')) {
+          website_url = u; break;
+        }
+      }
+    }
+
+    const addrMatch = text.match(/(?:Address|العنوان|Adresse|Location)[:\s]*([^\n]{10,120})/i);
+    const address = addrMatch ? addrMatch[1].trim() : '';
+
+    const hoursMatch = text.match(/(?:Hours|Open|ساعات|Horaires|Open hours)[:\s]*([^\n]{5,80})/i);
+    const hours = hoursMatch ? hoursMatch[1].trim() : '';
+
+    const parsed = parseMapsUrl(url);
+    return { name: parsed.name || '', phone, website_url, rating, reviews, address, hours, city: '', prof: '' };
+  } catch(e) { logLine('Jina error: ' + e.message, 'err'); return null; }
+}
+
+async function extractGeminiAI(url, partialData = {}){
+  const s = JSON.parse(localStorage.getItem(LS_S)||'{}');
+  if(!s.key) { logLine('  ⊘ Layer 4 skipped: no Gemini key', 'warn'); return null; }
+  try {
+    logLine('✨ Layer 4: Gemini AI enrichment...', 'info');
+    const parsed = parseMapsUrl(url);
+    const context = [
+      parsed.name ? `Place name: ${parsed.name}` : '',
+      partialData.phone ? `Phone found: ${partialData.phone}` : '',
+      partialData.address ? `Address found: ${partialData.address}` : ''
+    ].filter(Boolean).join('\n');
+
+    const prompt = `You are a business data extraction agent. Given a Google Maps URL${context ? ' and partial data' : ''}, identify the REAL business and provide accurate information.
+
+URL: ${url}
+${context ? '\nPARTIAL DATA:\n' + context : ''}
+
+TASK: Identify the exact business and provide REAL data based on your knowledge. If you know it, provide it. If you don't, use empty string "" — do NOT invent.
+
+Return ONLY valid JSON with this exact schema (no markdown, no explanation):
+{
+  "name": "exact business name",
+  "profession": "Dental clinic / Beauty salon / Medical clinic / Eye clinic / etc.",
+  "city": "city name",
+  "phone": "international format phone or empty",
+  "website_url": "official website or empty",
+  "rating": "decimal like 4.5 or empty",
+  "reviews": "integer or empty",
+  "address": "full address or empty",
+  "hours": "working hours summary or empty"
+}`;
+
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${s.key}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        contents:[{parts:[{text:prompt}]}],
+        generationConfig:{ responseMimeType:'application/json', temperature: 0.2 }
+      })
+    });
+
+    if (!r.ok) {
+      const err = await r.text();
+      logLine('  ✗ Gemini error: ' + err.slice(0, 150), 'err');
+      return null;
+    }
+
+    const j = await r.json();
+    const out = j.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!out) { logLine('  ✗ Empty response', 'warn'); return null; }
+
+    try {
+      const data = JSON.parse(out);
+      logLine('  ✓ Gemini extracted structured data', 'ok');
+      return data;
+    } catch(e) {
+      const jsonMatch = out.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { return JSON.parse(jsonMatch[0]); } catch(e2) {}
+      }
+      logLine('  ✗ Invalid JSON from Gemini', 'err');
+      return null;
+    }
+  } catch(e) { logLine('Gemini error: ' + e.message, 'err'); return null; }
+}
+
+function mergeData(existing, newData){
+  if (!newData) return existing;
+  const merged = {...existing};
+  Object.keys(newData).forEach(k => {
+    const v = newData[k];
+    if (v !== null && v !== undefined && String(v).trim() !== '') merged[k] = v;
+  });
+  return merged;
+}
+
+async function analyze(){
+  const url = $('#f_url').value.trim();
+  if(!url){ toast('Please paste a link first'); return; }
+  if(!url.includes('google.com/maps') && !url.includes('goo.gl')){
+    toast('Please paste a valid Google Maps link'); return;
+  }
+
+  const btn = $('#analyzeBtn');
+  btn.disabled = true;
+  clearLog();
+  $('#preview').classList.add('hidden');
+  $('#nextRow').classList.add('hidden');
+  const st = $('#analyzeStatus');
+  st.textContent = ''; st.className = 'status';
+
+  const s = JSON.parse(localStorage.getItem(LS_S)||'{}');
+
+  const hasAnyKey = s.serp || s.key || (s.gapiKey && s.gse);
+  if (!hasAnyKey) {
+    logLine('⚠ WARNING: No API keys configured!', 'err');
+    logLine('Open ⚙ Settings and add at least one key (Gemini is easiest).', 'warn');
+    st.textContent = '⚠ No API keys! Open Settings → add a key first.';
+    st.className = 'status err';
+    btn.disabled = false;
+    openSettings();
+    return;
+  }
+
+  logLine('Starting extraction pipeline', 'info');
+  logLine(`Config: SerpAPI=${s.serp?'✓':'✗'}, GSE=${s.gapiKey&&s.gse?'✓':'✗'}, Gemini=${s.key?'✓':'✗'}, Jina=${s.jina!==false?'✓':'✗'}`, 'info');
+
+  const parsed = parseMapsUrl(url);
+  client = {
+    rawUrl: url, name: parsed.name || '',
+    prof: '', city: '', phone: '', address: '',
+    rating: '', reviews: '', website: 'no', identity: 'no',
+    website_url: '', hours: '', notes: ''
+  };
+
+  if(s.serp){
+    const d = await extractSerpAPI(url, s.serp);
+    if (d) client = mergeData(client, d);
+  } else logLine('⊘ Layer 1 skipped: no SerpAPI key', 'warn');
+
+  if(s.gapiKey && s.gse && (!client.phone || !client.address)){
+    const d = await extractGoogleCSE(url, s.gapiKey, s.gse);
+    if (d) client = mergeData(client, d);
+  } else if (!s.gapiKey) logLine('⊘ Layer 2 skipped: no Google CSE keys', 'warn');
+
+  if(s.jina !== false && (!client.phone || !client.rating)){
+    const d = await extractJinaReader(url);
+    if (d) client = mergeData(client, d);
+  }
+
+  const needsGemini = !client.name || !client.prof || !client.city || !client.phone;
+  if (s.key && needsGemini) {
+    const d = await extractGeminiAI(url, client);
+    if (d) client = mergeData(client, d);
+  } else if (s.key && !needsGemini) logLine('✓ All essential data present — Gemini not needed', 'ok');
+
+  if (client.website_url && (client.website_url.includes('google.com') || client.website_url.includes('goo.gl'))) {
+    client.website_url = '';
+  }
+  if(client.website_url) client.website = 'yes';
+
+  $('#f_name').value = client.name || '';
+  $('#f_prof').value = client.prof || '';
+  $('#f_city').value = client.city || '';
+  $('#f_phone').value = client.phone || '';
+  $('#f_rating').value = client.rating || '';
+  $('#f_reviews').value = client.reviews || '';
+  $('#f_website_url').value = client.website_url || '';
+  $('#f_hours').value = client.hours || '';
+  $('#f_address').value = client.address || '';
+  $('#f_notes').value = '';
+  $('#f_website').value = client.website;
+  $('#f_identity').value = 'no';
+
+  showPreview();
+
+  const filledCount = [client.name, client.prof, client.city, client.phone, client.rating].filter(v => v && v.trim()).length;
+  if (filledCount >= 5) {
+    st.textContent = `✅ Extraction complete — all 5 key fields populated.`;
+    st.className = 'status ok';
+  } else if (filledCount >= 2) {
+    st.textContent = `⚠ Partial extraction (${filledCount}/5 fields). Please complete manually.`;
+    st.className = 'status warn';
+  } else {
+    st.textContent = `✗ Extraction mostly failed. Check log — try adding Gemini key for better results.`;
+    st.className = 'status err';
+  }
+
+  btn.disabled = false;
+}
+
+async function testSerp(){
+  const key = $('#set_serp').value.trim();
+  const out = $('#serpTest');
+  if (!key) { out.innerHTML = '<div class="test-result err">No key entered</div>'; return; }
+  out.innerHTML = '<div class="test-result">Testing...</div>';
+  try {
+    const url = 'https://serpapi.com/search.json?engine=google_maps&q=dentist&hl=en&api_key=' + key;
+    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url), { signal: AbortSignal.timeout(10000) });
+    const j = await r.json();
+    if (j.error) {
+      out.innerHTML = `<div class="test-result err">✗ ${j.error}</div>`;
+    } else if (j.local_results) {
+      out.innerHTML = '<div class="test-result ok">✓ Key works! Found ' + (j.local_results.places?.length || 0) + ' results</div>';
+    } else {
+      out.innerHTML = '<div class="test-result ok">✓ Key valid (no local results for test query)</div>';
+    }
+  } catch(e) {
+    out.innerHTML = `<div class="test-result err">✗ Connection failed: ${e.message}</div>`;
+  }
+}
+
+async function testGse(){
+  const apiKey = $('#set_gapiKey').value.trim();
+  const cx = $('#set_gse').value.trim();
+  const out = $('#gseTest');
+  if (!apiKey || !cx) { out.innerHTML = '<div class="test-result err">Enter both API key and CX</div>'; return; }
+  out.innerHTML = '<div class="test-result">Testing...</div>';
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=dentist`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (r.ok) {
+      const j = await r.json();
+      out.innerHTML = '<div class="test-result ok">✓ Both keys work! Found ' + (j.items?.length || 0) + ' results</div>';
+    } else {
+      const j = await r.json();
+      out.innerHTML = `<div class="test-result err">✗ ${j.error?.message || r.status}</div>`;
+    }
+  } catch(e) {
+    out.innerHTML = `<div class="test-result err">✗ ${e.message}</div>`;
+  }
+}
+
+async function testGemini(){
+  const key = $('#set_key').value.trim();
+  const out = $('#gemTest');
+  if (!key) { out.innerHTML = '<div class="test-result err">No key entered</div>'; return; }
+  out.innerHTML = '<div class="test-result">Testing...</div>';
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'Say "OK" if this works.' }] }], generationConfig: { maxOutputTokens: 10 } }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (r.ok) {
+      out.innerHTML = '<div class="test-result ok">✓ Key works! Gemini responded</div>';
+    } else {
+      const j = await r.json();
+      out.innerHTML = `<div class="test-result err">✗ ${j.error?.message || r.status}</div>`;
+    }
+  } catch(e) {
+    out.innerHTML = `<div class="test-result err">✗ ${e.message}</div>`;
+  }
+}
+
+function collect(){
+  client.name=$('#f_name').value.trim(); client.prof=$('#f_prof').value.trim();
+  client.city=$('#f_city').value.trim(); client.phone=$('#f_phone').value.trim();
+  client.rating=$('#f_rating').value.trim(); client.reviews=$('#f_reviews').value.trim();
+  client.address=$('#f_address').value.trim(); client.notes=$('#f_notes').value.trim();
+  client.website=$('#f_website').value; client.identity=$('#f_identity').value;
+  client.website_url=$('#f_website_url').value.trim(); client.hours=$('#f_hours').value.trim();
+  options={lang:$('#o_lang').value, cta:$('#o_cta').value, tone:$('#o_tone').value};
+}
+function buildPrompts(){
+  const LANG_FULL = {
+    ar:'Arabic — full RTL layout, dir="rtl", use Tajawal font',
+    en:'English — LTR layout, use Inter font',
+    fr:'French — LTR layout, use Inter font'
+  }[options.lang];
+  const CTA = {
+    whatsapp:`WhatsApp booking — real number: ${client.phone||'[PASTE NUMBER]'}`,
+    call:'Direct phone call with click-to-call',
+    booking:'In-page appointment form',
+    visit:'Embedded Google Map for directions'
+  }[options.cta];
+  const TONE = {
+    trust:'trusted, calm, clinical', luxury:'luxury, premium',
+    friendly:'friendly, warm', modern:'modern, tech-forward'
+  }[options.tone];
+  const WEB = client.website==='no'
+    ? 'Client has NO website — this will be their first digital presence.'
+    : `Client has a website (${client.website_url}) — build a conversion-focused landing page.`;
+  const IDENT = client.identity==='no' ? 'No visual identity — suggest one.' : 'Match their existing brand.';
+  const PROOF = client.rating ? `- Real Google rating: ${client.rating} ⭐ (${client.reviews||'?'} reviews).` : '';
+  const HOURS = client.hours ? `- Working hours: ${client.hours}` : '';
+  const NOTES = client.notes ? `Additional: ${client.notes}` : '';
+
+  const landing=`You are a senior web designer specializing in medical landing pages. Build a complete page:
+
+CLIENT DATA:
+- Name: ${client.name}
+- Profession: ${client.prof}
+- City: ${client.city}
+- Address: ${client.address||'—'}
+- Phone/WhatsApp: ${client.phone||'—'}
+- Website: ${client.website_url||'none'}
+${HOURS}
+${PROOF}
+
+PAGE LANGUAGE: ${LANG_FULL}
+CONTEXT: ${WEB} ${IDENT} ${NOTES}
+PRIMARY CTA: ${CTA}.
+VISUAL TONE: ${TONE}.
+
+SECTIONS (in order): Hero + trust bar + services + about + reviews + FAQ + location + footer.
+TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
+OUTPUT: single self-contained HTML/CSS/JS file.`;
+
+  const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.
+
+DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, patient folder, social post), usage guidelines.`;
+
+  const clinicName = client.name || 'your clinic';
+  const city = client.city || 'your city';
+  const ratingLine = client.rating ? `I noticed you have a ${client.rating} ⭐ rating with ${client.reviews||'—'} reviews. ` : '';
+  const webIssue = client.website==='no' ? "you don't currently have an official website" : "your web presence could be stronger";
+
+  let outreach = '';
+  if(options.lang === 'en'){
+    outreach = `👋 Hi team at ${clinicName},\n\nI found your listing on Google Maps in ${city}. ${ratingLine}I noticed ${webIssue}.\n\nI've put together a free design proposal for a professional landing page. Would you like me to send the preview? 🙏`;
+  } else if(options.lang === 'ar'){
+    outreach = `👋 مرحبًا بفريق ${clinicName}\n\nصادفتُ ملفكم على خرائط Google في ${city}. ${client.rating?`تقييمكم ${client.rating} ⭐ من ${client.reviews||'—'} مراجعة — دليل قوي على ثقة المرضى بكم. `:''}${client.website==='no' ? 'لاحظتُ أنكم لا تملكون موقعًا رسميًا حتى الآن.' : 'يمكن تعزيز حضوركم الرقمي أكثر.'}\n\nجهّزتُ لكم مقترح تصميم أولي مجاني لصفحة هبوط احترافية. هل يمكنني إرسال المعاينة؟ 🙏`;
+  } else {
+    outreach = `👋 Bonjour à l'équipe de ${clinicName},\n\nJ'ai trouvé votre fiche Google Maps à ${city}. ${ratingLine}J'ai remarqué que ${client.website==='no' ? "vous n'avez pas encore de site officiel." : "votre présence en ligne pourrait être renforcée."}\n\nJ'ai préparé une proposition de design gratuite. Puis-je envoyer l'aperçu ? 🙏`;
+  }
+  return {landing, identity, outreach};
+}
+function generate(){
+  collect();
+  if(!client.name||!client.prof||!client.city){toast('Please complete: name, profession, city'); go(1); return;}
+  lastPrompts=buildPrompts();
+  showTab('landing', document.querySelector('.tab'));
+  saveOrUpdate();
+  go(3);
+  toast('✅ Prompts generated');
+}
+
+function showTab(key, el){
+  currentTab=key;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  $('#promptOut').textContent=lastPrompts[key]||'';
+  $('#aiBtn').style.display = key==='outreach' ? 'none' : '';
+}
+function copyCurrent(){
+  navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>toast('⧉ Copied'));
+}
+function downloadCurrent(){
+  const md=`# ${client.name} — ${client.prof} | ${client.city}\n\n## Landing Page\n\n${lastPrompts.landing}\n\n## Visual Identity\n\n${lastPrompts.identity}\n\n## Outreach\n\n${lastPrompts.outreach}\n`;
+  dl(`prompt-${(client.name||'client').replace(/[^a-z0-9]/gi,'-').toLowerCase()}.md`, md);
+}
+function dl(name,text){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
+  a.download=name; a.click();
+}
+
+function aiImprove(){
+  const s=JSON.parse(localStorage.getItem(LS_S)||'{}');
+  if(!s.key){toast('Add Gemini key in Settings'); openSettings(); return;}
+  doImprove();
+}
+async function doImprove(){
+  const s=JSON.parse(localStorage.getItem(LS_S)||'{}');
+  const btn=$('#aiBtn'); btn.disabled=true;
+  $('#aiStatus').textContent='⏳ Improving...';
+  const meta=`Expert Prompt Engineer: improve this prompt for code/design tools. Keep all real data. Add professional detail (hierarchy, microcopy, SEO, accessibility). Return ONLY the improved prompt:\n----\n${lastPrompts[currentTab]}`;
+  try{
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${s.key}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:meta}]}]})
+    });
+    const j = await r.json();
+    const out = j.candidates?.[0]?.content?.parts?.[0]?.text;
+    if(out){ lastPrompts[currentTab]=out; $('#promptOut').textContent=out; toast('✨ Improved'); }
+    else $('#aiStatus').textContent='⚠ No response';
+  }catch(e){ $('#aiStatus').textContent='⚠ Failed'; }
+  btn.disabled=false;
+}
+
+function getHist(){ return JSON.parse(localStorage.getItem(LS_H)||'[]'); }
+function saveOrUpdate(){
+  const h=getHist();
+  const item={id:currentId||Date.now(), ts:new Date().toISOString().replace('T',' ').slice(0,16), client, options, prompts:lastPrompts};
+  const i=h.findIndex(x=>x.id===item.id);
+  i>=0 ? h[i]=item : h.unshift(item);
+  currentId=item.id;
+  localStorage.setItem(LS_H, JSON.stringify(h));
+}
+function renderHistory(){
+  const h=getHist();
+  $('#histList').innerHTML = h.length ? h.map(x=>`
+    <div class="hist-item">
+      <div class="info"><b>${x.client.name}</b>
+        <span>${x.client.prof} • ${x.client.city} • ${x.ts}</span></div>
+      <div class="row" style="margin:0">
+        <button class="btn small" onclick="openItem(${x.id})">Open</button>
+        <button class="btn ghost small" onclick="delItem(${x.id})">Delete</button>
+      </div>
+    </div>`).join('')
+    : '<p class="sub">No saved clients yet.</p>';
+}
+function openItem(id){
+  const x=getHist().find(v=>v.id===id); if(!x) return;
+  client=x.client; options=x.options; lastPrompts=x.prompts; currentId=id;
+  $('#f_name').value=client.name||''; $('#f_prof').value=client.prof||'';
+  $('#f_city').value=client.city||''; $('#f_phone').value=client.phone||'';
+  $('#f_rating').value=client.rating||''; $('#f_reviews').value=client.reviews||'';
+  $('#f_address').value=client.address||''; $('#f_notes').value=client.notes||'';
+  $('#f_website').value=client.website||'no'; $('#f_identity').value=client.identity||'no';
+  $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
+  $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
+  showTab('landing', document.querySelector('.tab'));
+  go(3);
+}
+function delItem(id){
+  localStorage.setItem(LS_H, JSON.stringify(getHist().filter(x=>x.id!==id)));
+  renderHistory(); toast('🗑 Deleted');
+}
+function exportAll(){ dl('promptclinic-history.json', JSON.stringify(getHist(),null,2)); }
+
+function openSettings(){
+  $('#overlay').classList.add('open');
+  const s = JSON.parse(localStorage.getItem(LS_S) || '{}');
+  $('#set_serp').value = s.serp || '';
+  $('#set_gapiKey').value = s.gapiKey || '';
+  $('#set_gse').value = s.gse || '';
+  $('#set_key').value = s.key || '';
+  $('#set_jina').checked = s.jina !== false;
+  updateKeyStatus();
+  const hasAny = s.serp || s.key || (s.gapiKey && s.gse);
+  $('#keysWarning').classList.toggle('hidden', hasAny);
+}
+function updateKeyStatus(){
+  const s = JSON.parse(localStorage.getItem(LS_S) || '{}');
+  const setStatus = (id, current, saved) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (current && current === saved) { el.className = 'key-status saved'; el.textContent = '✓ saved'; }
+    else if (current && !saved) { el.className = 'key-status'; el.style.color = 'var(--warn)'; el.textContent = '⚠ unsaved'; }
+    else { el.className = 'key-status empty'; el.textContent = '✗ not saved'; }
+  };
+  setStatus('serpStatus', $('#set_serp').value.trim(), s.serp);
+  setStatus('gapiKeyStatus', $('#set_gapiKey').value.trim(), s.gapiKey);
+  setStatus('gseStatus', $('#set_gse').value.trim(), s.gse);
+  setStatus('gemStatus', $('#set_key').value.trim(), s.key);
+}
+function closeSettings(){$('#overlay').classList.remove('open');}
+function saveSettings(){
+  const data = {
+    serp: $('#set_serp').value.trim(),
+    gapiKey: $('#set_gapiKey').value.trim(),
+    gse: $('#set_gse').value.trim(),
+    key: $('#set_key').value.trim(),
+    jina: $('#set_jina').checked
+  };
+  try {
+    localStorage.setItem(LS_S, JSON.stringify(data));
+    const verify = JSON.parse(localStorage.getItem(LS_S) || '{}');
+    if (JSON.stringify(verify) === JSON.stringify(data)) {
+      closeSettings();
+      toast('💾 Settings saved successfully');
+      updateKeyStatus();
+    } else {
+      toast('⚠ Save verification failed — try a different browser or disable incognito mode');
+    }
+  } catch(e) {
+    toast('⚠ localStorage not available: ' + e.message);
+  }
+}
+function clearAllKeys(){
+  if(!confirm('Clear all saved API keys?')) return;
+  localStorage.removeItem(LS_S);
+  $('#set_serp').value = '';
+  $('#set_gapiKey').value = '';
+  $('#set_gse').value = '';
+  $('#set_key').value = '';
+  updateKeyStatus();
+  toast('🗑 All keys cleared');
+}
+
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2200); }
+
+go(0);
+</script>
+</body>
+</html>
