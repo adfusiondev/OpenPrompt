@@ -228,43 +228,21 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 <div id="overlay">
   <div class="panel">
     <h1 style="font-size:18px">⚙ Settings</h1>
-    <p class="sub">Configure your API keys. All options are free. At least one key is required.</p>
+    <p class="sub">All upstream API keys live in the proxy backend's <b>.env</b> — nothing secret is stored in this browser.</p>
 
     <div id="keysWarning" class="warning-box hidden">
-      <b>⚠ Warning:</b> No API keys are currently saved! If you're in <b>Incognito / Private mode</b>, keys will be lost when you close the tab. Use a normal browser window, or use the Test buttons below to verify each key works.
+      <b>⚠ Proxy backend offline.</b> Run <b>npm install && npm start</b> in the project folder, then press "Test connection". Extraction will run without API layers until it is reachable.
     </div>
 
-    <h2 style="color:var(--ok)">🎯 SerpAPI — Best extraction (optional)</h2>
-    <p class="sub" style="font-size:12px">100 free searches/month. Extracts name, phone, address, rating, website, hours.</p>
-    <label>SerpAPI Key <span id="serpStatus" class="key-status"></span></label>
-    <input id="set_serp" class="mono" placeholder="abc123..." oninput="updateKeyStatus()">
+    <h2 style="color:var(--info)">🛡 Backend Proxy</h2>
+    <p class="sub" style="font-size:12px">Local Express server (<b>server.js</b>) that attaches your API keys server-side.</p>
+    <label>Proxy URL <span id="proxyStatus" class="key-status"></span></label>
+    <input id="set_proxy" class="mono" placeholder="http://localhost:3000" oninput="updateKeyStatus()">
     <div class="btn-row">
-      <button class="btn small ghost" onclick="testSerp()">🧪 Test key</button>
+      <button class="btn small ghost" onclick="testBackend()">🧪 Test connection</button>
     </div>
-    <div id="serpTest"></div>
-    <div class="key-help">🔗 Get free key: <a href="https://serpapi.com/manage-api-key" target="_blank">serpapi.com</a> → Sign up → Copy "Your Private API Key"</div>
-
-    <h2 style="color:var(--info); margin-top:22px">🔍 Google Custom Search (optional, powerful)</h2>
-    <p class="sub" style="font-size:12px"><b>100 free queries/day</b> — much more generous than SerpAPI. Needs API key + Search Engine ID (CX).</p>
-    <label>Google API Key <span id="gapiKeyStatus" class="key-status"></span></label>
-    <input id="set_gapiKey" class="mono" placeholder="AIza..." oninput="updateKeyStatus()">
-    <label>Search Engine ID (CX) <span id="gseStatus" class="key-status"></span></label>
-    <input id="set_gse" class="mono" placeholder="a1b2c3d4e5..." oninput="updateKeyStatus()">
-    <div class="btn-row">
-      <button class="btn small ghost" onclick="testGse()">🧪 Test</button>
-    </div>
-    <div id="gseTest"></div>
-    <div class="key-help">🔗 Get free: <a href="https://developers.google.com/custom-search/v1/introduction" target="_blank">Custom Search API</a> + <a href="https://programmablesearchengine.google.com/" target="_blank">create a search engine</a> (turn on "Search the entire web")</div>
-
-    <h2 style="color:var(--warn); margin-top:22px">✨ Gemini AI — Fallback + Improve (recommended)</h2>
-    <p class="sub" style="font-size:12px">Used when other layers fail. Also powers the "Improve with AI" button.</p>
-    <label>Gemini API Key <span id="gemStatus" class="key-status"></span></label>
-    <input id="set_key" class="mono" placeholder="AIza..." oninput="updateKeyStatus()">
-    <div class="btn-row">
-      <button class="btn small ghost" onclick="testGemini()">🧪 Test key</button>
-    </div>
-    <div id="gemTest"></div>
-    <div class="key-help">🔗 Get free key: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> → Create API key</div>
+    <div id="backendTest"></div>
+    <div class="key-help">SERPAPI_KEY / GEMINI_API_KEY / JINA_API_KEY are read from the server's <b>.env</b> file — never from this browser.</div>
 
     <h2 style="color:var(--muted); margin-top:22px">🔧 Extraction Options</h2>
     <label class="toggle">
@@ -272,16 +250,11 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <span class="slider"></span>
       <span>Use Jina AI reader</span>
     </label>
-    <label>Jina API Key <span id="jinaStatus" class="key-status"></span> <span class="sub" style="font-size:11px">(optional &mdash; r.jina.ai now rejects some keyless requests)</span></label>
-    <input id="set_jinakey" class="mono" placeholder="jina_..." oninput="updateKeyStatus()">
-    <div class="btn-row">
-      <button class="btn small ghost" onclick="testJina()">🧪 Test key</button>
-    </div>
-    <div id="jinaTest"></div>
+    <p class="sub" style="font-size:11px;margin-top:6px">JINA_API_KEY (if any) is read from the proxy's .env.</p>
 
     <div class="row">
-      <button class="btn" onclick="saveSettings()">💾 Save all keys</button>
-      <button class="btn ghost" onclick="clearAllKeys()">🗑 Clear all</button>
+      <button class="btn" onclick="saveSettings()">💾 Save settings</button>
+      <button class="btn ghost" onclick="clearAllKeys()">↺ Reset URL</button>
       <button class="btn ghost" onclick="closeSettings()">Close</button>
     </div>
   </div>
@@ -304,24 +277,45 @@ const LS_H='op_history_v1', LS_S='op_settings_v1';
 let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
 const STEPS=['URL','Data','Options','Results','History'];
 const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest','gemini-2.5-flash'];
+const PROXY_DEFAULT='http://localhost:3000';
+
+function apiBase(){
+  const u=(getSettings().proxyUrl||'').trim();
+  return u ? u.replace(/\/+$/,'') : PROXY_DEFAULT;
+}
+function proxyOfflineMsg(){
+  return '\u26a0 Proxy backend offline ('+apiBase()+'). Ensure `npm start` is running.';
+}
+async function apiFetch(path, opts = {}, timeoutMs = 15000){
+  try {
+    const r = await fetch(apiBase()+path, { ...opts, signal: AbortSignal.timeout(timeoutMs) });
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch(e) { data = text; }
+    return { ok:r.ok, status:r.status, data };
+  } catch(e) {
+    return { ok:false, status:0, data:null, error:e.message, offline:true };
+  }
+}
 
 function isJunkUrl(u){ return !u || /(google\.|goo\.gl|gstatic\.|ggpht\.)/i.test(u); }
 
-async function callGemini(apiKey, body, timeoutMs){
+async function callGemini(body, timeoutMs){
   let lastErr='';
   for (const model of GEMINI_MODELS){
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      const r = await apiFetch('/api/gemini', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs || 20000)
-      });
-      if (r.ok) return { ok:true, model, data: await r.json() };
-      const t = await r.text();
+        body: JSON.stringify({ model, prompt: body })
+      }, timeoutMs || 25000);
+      if (r.offline) return { ok:false, error: proxyOfflineMsg() };
+      if (r.ok) return { ok:true, model, data:r.data };
+      if (r.status === 503 && r.data && r.data.code === 'NO_KEY') return { ok:false, error:String(r.data.error||'GEMINI_API_KEY missing on proxy') };
+      const t = typeof r.data==='string' ? r.data : JSON.stringify(r.data||{});
       lastErr = `${model}: HTTP ${r.status} — ${t.slice(0,120)}`;
       if (r.status === 404 || /not found|not available|unsupported|deprecated/i.test(t)) continue;
       break;
-    } catch(e) { lastErr = `${model}: ${e.message}`; }
+    } catch(e) { lastErr = `${model}: ${e.message}`; break; }
   }
   return { ok:false, error:lastErr };
 }
@@ -430,6 +424,22 @@ async function resolveShortUrl(url, budgetMs = 15000){
   const left = () => budgetMs - (Date.now() - t0);
   logLine('Resolving short URL...', 'info');
   try {
+    const pr = await apiFetch('/api/unshorten?url=' + encodeURIComponent(url), {}, Math.min(8000, left()));
+    if (pr.offline) {
+      logLine(proxyOfflineMsg() + ' \u2014 trying fallbacks', 'warn');
+    } else if (pr.ok && pr.data && pr.data.ok && pr.data.url) {
+      const found = findMapsUrl(pr.data.url);
+      if (found) {
+        logLine('\u2713 Resolved via proxy \u2192 ' + found.slice(0,80) + '...', 'ok');
+        return found;
+      }
+      logLine('  Proxy returned a non-Maps URL \u2014 trying fallbacks', 'warn');
+    } else {
+      const em = pr.data && pr.data.error ? pr.data.error : ('HTTP ' + pr.status);
+      logLine('  Proxy resolver: ' + em + ' \u2014 trying fallbacks', 'warn');
+    }
+  } catch(e) {}
+  try {
     const r = await fetch('https://r.jina.ai/' + url, {
       headers: jinaHeaders(),
       signal: AbortSignal.timeout(Math.min(10000, left()))
@@ -469,48 +479,43 @@ async function resolveShortUrl(url, budgetMs = 15000){
   return url;
 }
 
-async function extractSerpAPI(url, apiKey, budgetMs = 12000){
+async function extractSerpAPI(url, budgetMs = 12000){
   try {
     logLine('🎯 Layer 1: SerpAPI...', 'info');
     const parsed = parseMapsUrl(url);
-    let serpUrl = null;
+    const params = new URLSearchParams({ engine:'google_maps', hl:'en' });
 
     if (parsed.placeId) {
       logLine('  → Using place_id from URL', 'info');
-      serpUrl = `https://serpapi.com/search.json?engine=google_maps&type=place&place_id=${encodeURIComponent(parsed.placeId)}&hl=en&api_key=${apiKey}`;
+      params.set('type','place');
+      params.set('place_id', parsed.placeId);
     } else if (parsed.lat !== null) {
       logLine('  → Searching by coordinates', 'info');
-      const ll = `@${parsed.lat},${parsed.lng},17z`;
-      serpUrl = `https://serpapi.com/search.json?engine=google_maps&ll=${encodeURIComponent(ll)}&type=search&hl=en&google_domain=google.com&api_key=${apiKey}`;
+      params.set('ll', `@${parsed.lat},${parsed.lng},17z`);
+      params.set('type','search');
+      params.set('google_domain','google.com');
     } else if (parsed.name) {
       logLine('  → Searching by place name', 'info');
-      serpUrl = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(parsed.name)}&hl=en&google_domain=google.com&api_key=${apiKey}`;
+      params.set('q', parsed.name);
+      params.set('google_domain','google.com');
     } else {
       logLine('  ✗ Cannot build SerpAPI query', 'warn');
       return null;
     }
 
-    const proxies = [
-      u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-      u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-      u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
-    ];
-
-    let searchData = null;
     const t0 = Date.now();
-    for (let i = 0; i < proxies.length; i++) {
-      const leftMs = budgetMs - (Date.now() - t0);
-      if (leftMs < 3000) { logLine('  ⊘ Out of layer time budget', 'warn'); break; }
-      try {
-        const r = await fetch(proxies[i](serpUrl), { signal: AbortSignal.timeout(Math.min(10000, leftMs)) });
-        if (!r.ok) continue;
-        const text = await r.text();
-        searchData = JSON.parse(text);
-        if (searchData && !searchData.error) break;
-      } catch(e) {}
-    }
+    const leftMs = budgetMs - (Date.now() - t0);
+    if (leftMs < 3000) { logLine('  ⊘ Out of layer time budget', 'warn'); return null; }
 
-    if (!searchData) { logLine('  ✗ All proxies failed', 'err'); return null; }
+    const r = await apiFetch('/api/serpapi?' + params.toString(), {}, Math.min(15000, leftMs));
+    if (r.offline) { logLine(proxyOfflineMsg(), 'err'); return null; }
+    if (!r.ok) {
+      const em = r.data && r.data.error ? r.data.error : ('HTTP ' + r.status);
+      logLine('  ✗ Proxy/SerpAPI error: ' + em, 'err');
+      return null;
+    }
+    const searchData = r.data;
+    if (!searchData || typeof searchData !== 'object') { logLine('  ✗ Invalid response from proxy', 'err'); return null; }
     if (searchData.error) { logLine('  ✗ SerpAPI error: ' + searchData.error, 'err'); return null; }
 
     if (searchData.place_results) {
@@ -575,64 +580,20 @@ function parseSearchPlace(p){
   };
 }
 
-async function extractGoogleCSE(url, apiKey, cx, partialData = {}, budgetMs = 12000){
-  try {
-    logLine('🔍 Layer 2: Google Custom Search...', 'info');
-    const parsed = parseMapsUrl(url);
-    let query = partialData.name || parsed.name || (parsed.lat ? `business at ${parsed.lat},${parsed.lng}` : '');
-    if (!query) { logLine('  ✗ No query to search', 'warn'); return null; }
-
-    logLine('  → Query: "' + query + '"', 'info');
-    const knownCtx = [partialData.name, partialData.phone, partialData.address].filter(Boolean).join(' | ');
-    if (knownCtx) logLine('  → Context from earlier layers: ' + knownCtx, 'info');
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query + ' clinic phone address')}&num=5`;
-
-    const r = await fetch(searchUrl, { signal: AbortSignal.timeout(Math.min(12000, budgetMs)) });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      logLine('  ✗ Google CSE error: ' + (err.error?.message || r.status), 'err');
-      return null;
-    }
-
-    const data = await r.json();
-    if (!data.items || data.items.length === 0) { logLine('  ✗ No results', 'warn'); return null; }
-
-    const snippets = data.items.map(i => (i.snippet || '') + ' ' + (i.title || '')).join(' ');
-    logLine('  → Got ' + data.items.length + ' results', 'info');
-
-    const phoneMatch = snippets.match(/(\+\d{1,3}[\s\-]?\d{1,4}[\s\-]?\d{1,4}[\s\-]?\d{1,4})/);
-    const phone = phoneMatch ? phoneMatch[1].trim() : '';
-
-    const addrMatch = snippets.match(/(?:address|located at)[:\s]*([A-Za-z0-9\s,\.]{10,80})/i);
-    const address = addrMatch ? addrMatch[1].trim() : (data.items[0]?.snippet || '').slice(0, 80);
-
-    const ratingMatch = snippets.match(/(\d\.\d)\s*(?:star|rating)/i);
-    const rating = ratingMatch ? ratingMatch[1] : '';
-
-    const reviewsMatch = snippets.match(/(\d[\d,]*)\s*(?:review|avis)/i);
-    const reviews = reviewsMatch ? reviewsMatch[1].replace(/,/g, '') : '';
-
-    let website = '';
-    for (const item of data.items) {
-      if (item.link && !isJunkUrl(item.link)) {
-        website = item.link; break;
-      }
-    }
-
-    logLine('  ✓ Extracted from Google search', 'ok');
-    return { name: parsed.name || '', phone, address, rating, reviews, website_url: website, city: '', prof: '', hours: '' };
-  } catch(e) { logLine('Google CSE error: ' + e.message, 'err'); return null; }
-}
-
 async function extractJinaReader(url, partialData = {}, budgetMs = 12000){
   try {
     logLine('📖 Layer 3: Jina AI reader...', 'info');
-    const r = await fetch('https://r.jina.ai/' + url, {
-      headers: { ...jinaHeaders(), 'X-No-Cache': 'true', 'X-With-Generated-Alt': 'true' },
-      signal: AbortSignal.timeout(Math.min(12000, budgetMs))
-    });
-    if (!r.ok) { logLine('  ✗ HTTP ' + r.status, 'warn'); return null; }
-    const text = await r.text();
+    const r = await apiFetch('/api/jina', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ targetUrl: url })
+    }, Math.min(20000, budgetMs));
+    if (r.offline) { logLine(proxyOfflineMsg(), 'err'); return null; }
+    if (!r.ok) {
+      const em = r.data && r.data.error ? r.data.error : ('HTTP ' + r.status);
+      logLine('  ✗ Jina error: ' + em, 'warn');
+      return null;
+    }
+    const text = typeof r.data==='string' ? r.data : '';
     if (!text || text.length < 100) { logLine('  ✗ Very little content', 'warn'); return null; }
     logLine(`  → Got ${text.length} chars`, 'ok');
 
@@ -671,8 +632,6 @@ async function extractJinaReader(url, partialData = {}, budgetMs = 12000){
 }
 
 async function extractGeminiAI(url, partialData = {}, budgetMs = 15000){
-  const s = JSON.parse(localStorage.getItem(LS_S)||'{}');
-  if(!s.key) { logLine('  ⊘ Layer 4 skipped: no Gemini key', 'warn'); return null; }
   try {
     logLine('✨ Layer 4: Gemini AI enrichment...', 'info');
     const parsed = parseMapsUrl(url);
@@ -702,10 +661,10 @@ Return ONLY valid JSON with this exact schema (no markdown, no explanation):
   "hours": "working hours summary or empty"
 }`;
 
-    const res = await callGemini(s.key, {
+    const res = await callGemini({
       contents:[{parts:[{text:prompt}]}],
       generationConfig:{ responseMimeType:'application/json', temperature: 0.2 }
-    }, Math.min(15000, budgetMs));
+    }, Math.min(25000, budgetMs));
 
     if (!res.ok) { logLine('  ✗ Gemini error: ' + res.error, 'err'); return null; }
     logLine('  → Model: ' + res.model, 'info');
@@ -759,21 +718,25 @@ async function analyze(){
   const st = $('#analyzeStatus');
   st.textContent = ''; st.className = 'status';
 
-  const s = JSON.parse(localStorage.getItem(LS_S)||'{}');
+  const s = getSettings();
 
-  const hasAnyKey = s.serp || s.key || (s.gapiKey && s.gse);
-  if (!hasAnyKey) {
-    logLine('⚠ WARNING: No API keys configured!', 'err');
-    logLine('Open ⚙ Settings and add at least one key (Gemini is easiest).', 'warn');
-    st.textContent = '⚠ No API keys! Open Settings → add a key first.';
+  logLine('Checking proxy backend ('+apiBase()+')...', 'info');
+  const h = await apiFetch('/api/health', {}, 2500);
+  let backendUp = false, serverKeys = {};
+  if (h.ok && h.data && h.data.ok) {
+    backendUp = true;
+    serverKeys = h.data.keys || {};
+    logLine(`✓ Proxy online — keys: SerpAPI=${serverKeys.serpapi?'✓':'✗'}, Gemini=${serverKeys.gemini?'✓':'✗'}, Jina=${serverKeys.jina?'✓':'✗'}`, 'ok');
+  } else {
+    logLine(proxyOfflineMsg(), 'err');
+    st.textContent = '⚠ Proxy backend offline — run `npm start` in the project folder.';
     st.className = 'status err';
     btn.disabled = false;
-    openSettings();
     return;
   }
 
   logLine('Starting extraction pipeline', 'info');
-  logLine(`Config: SerpAPI=${s.serp?'✓':'✗'}, GSE=${s.gapiKey&&s.gse?'✓':'✗'}, Gemini=${s.key?'✓':'✗'}, Jina=${s.jina!==false?'✓':'✗'}${s.jinaKey?' (key)':''}`, 'info');
+  logLine(`Config: proxy=${apiBase()}, Jina reader=${s.jina!==false?'on':'off'}`, 'info');
   const deadline = Date.now() + 45000;
   const timeLeft = () => deadline - Date.now();
   const outOfTime = () => timeLeft() < 4000;
@@ -788,18 +751,10 @@ async function analyze(){
     website_url: '', hours: '', notes: ''
   };
 
-  if(!s.serp) logLine('⚠ Layer 1 skipped: no SerpAPI key', 'warn');
+  if(!serverKeys.serpapi) logLine('⚠ Layer 1 skipped: SERPAPI_KEY not set in proxy .env', 'warn');
   else if(outOfTime()) logLine('⚠ Layer 1 skipped: pipeline time budget exhausted', 'warn');
   else {
-    const d = await extractSerpAPI(url, s.serp, timeLeft());
-    if (d) client = mergeData(client, d);
-  }
-
-  if(!s.gapiKey || !s.gse) logLine('⚠ Layer 2 skipped: no Google CSE keys', 'warn');
-  else if(client.phone && client.address) logLine('⚠ Layer 2 skipped: phone & address already found', 'info');
-  else if(outOfTime()) logLine('⚠ Layer 2 skipped: pipeline time budget exhausted', 'warn');
-  else {
-    const d = await extractGoogleCSE(url, s.gapiKey, s.gse, client, timeLeft());
+    const d = await extractSerpAPI(url, timeLeft());
     if (d) client = mergeData(client, d);
   }
 
@@ -807,12 +762,13 @@ async function analyze(){
   else if(client.phone && client.rating) logLine('⚠ Layer 3 skipped: phone & rating already found', 'info');
   else if(outOfTime()) logLine('⚠ Layer 3 skipped: pipeline time budget exhausted', 'warn');
   else {
+    if(!serverKeys.jina) logLine('  ℹ No JINA_API_KEY on proxy — trying keyless', 'info');
     const d = await extractJinaReader(url, client, timeLeft());
     if (d) client = mergeData(client, d);
   }
 
   const needsGemini = !client.name || !client.prof || !client.city || !client.phone;
-  if(!s.key) logLine('⚠ Layer 4 skipped: no Gemini key', 'warn');
+  if(!serverKeys.gemini) logLine('⚠ Layer 4 skipped: GEMINI_API_KEY not set in proxy .env', 'warn');
   else if(!needsGemini) logLine('✓ All essential data present — Gemini not needed', 'ok');
   else if(outOfTime()) logLine('⚠ Layer 4 skipped: pipeline time budget exhausted', 'warn');
   else {
@@ -851,84 +807,32 @@ async function analyze(){
     st.textContent = `⚠ Partial extraction (${filledCount}/5 fields). Please complete manually.`;
     st.className = 'status warn';
   } else {
-    st.textContent = `✗ Extraction mostly failed. Check log — try adding Gemini key for better results.`;
+    st.textContent = `✗ Extraction mostly failed. Check log — start the proxy backend with keys configured in .env for better results.`;
     st.className = 'status err';
   }
 
   btn.disabled = false;
 }
 
-async function testSerp(){
-  const key = $('#set_serp').value.trim();
-  const out = $('#serpTest');
-  if (!key) { out.innerHTML = '<div class="test-result err">No key entered</div>'; return; }
+async function testBackend(){
+  const out = $('#backendTest');
   out.innerHTML = '<div class="test-result">Testing...</div>';
+  const base = $('#set_proxy').value.trim().replace(/\/+$/,'') || apiBase();
   try {
-    const url = 'https://serpapi.com/search.json?engine=google_maps&q=dentist&hl=en&api_key=' + key;
-    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url), { signal: AbortSignal.timeout(10000) });
-    const j = await r.json();
-    if (j.error) {
-      out.innerHTML = `<div class="test-result err">✗ ${j.error}</div>`;
-    } else if (j.local_results) {
-      out.innerHTML = '<div class="test-result ok">✓ Key works! Found ' + (j.local_results.places?.length || 0) + ' results</div>';
+    const r = await fetch(base + '/api/health', { signal: AbortSignal.timeout(4000) });
+    const d = await r.json();
+    if (d && d.ok) {
+      $('#keysWarning').classList.add('hidden');
+      const k = d.keys || {};
+      let html = '<div class="test-result ok">✓ Backend online at ' + base + ' — SERPAPI_KEY ' + (k.serpapi?'✓':'✗') + ' · GEMINI_API_KEY ' + (k.gemini?'✓':'✗') + ' · JINA_API_KEY ' + (k.jina?'✓':'✗') + '</div>';
+      if (!k.serpapi && !k.gemini) html += '<div class="test-result warn">Reachable, but no keys configured — add them to .env and restart</div>';
+      out.innerHTML = html;
     } else {
-      out.innerHTML = '<div class="test-result ok">✓ Key valid (no local results for test query)</div>';
+      out.innerHTML = '<div class="test-result err">✗ Unexpected response (HTTP ' + r.status + ') from ' + base + '</div>';
     }
   } catch(e) {
-    out.innerHTML = `<div class="test-result err">✗ Connection failed: ${e.message}</div>`;
-  }
-}
-
-async function testGse(){
-  const apiKey = $('#set_gapiKey').value.trim();
-  const cx = $('#set_gse').value.trim();
-  const out = $('#gseTest');
-  if (!apiKey || !cx) { out.innerHTML = '<div class="test-result err">Enter both API key and CX</div>'; return; }
-  out.innerHTML = '<div class="test-result">Testing...</div>';
-  try {
-    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=dentist`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (r.ok) {
-      const j = await r.json();
-      out.innerHTML = '<div class="test-result ok">✓ Both keys work! Found ' + (j.items?.length || 0) + ' results</div>';
-    } else {
-      const j = await r.json();
-      out.innerHTML = `<div class="test-result err">✗ ${j.error?.message || r.status}</div>`;
-    }
-  } catch(e) {
-    out.innerHTML = `<div class="test-result err">✗ ${e.message}</div>`;
-  }
-}
-
-async function testGemini(){
-  const key = $('#set_key').value.trim();
-  const out = $('#gemTest');
-  if (!key) { out.innerHTML = '<div class="test-result err">No key entered</div>'; return; }
-  out.innerHTML = '<div class="test-result">Testing...</div>';
-  try {
-    const res = await callGemini(key, { contents: [{ parts: [{ text: 'Say "OK" if this works.' }] }], generationConfig: { maxOutputTokens: 10 } }, 10000);
-    if (res.ok) {
-      out.innerHTML = '<div class="test-result ok">✓ Key works! Responded via ' + res.model + '</div>';
-    } else {
-      out.innerHTML = `<div class="test-result err">✗ ${res.error}</div>`;
-    }
-  } catch(e) {
-    out.innerHTML = `<div class="test-result err">✗ ${e.message}</div>`;
-  }
-}
-
-async function testJina(){
-  const key = $('#set_jinakey').value.trim();
-  const out = $('#jinaTest');
-  out.innerHTML = '<div class="test-result">Testing...</div>';
-  try {
-    const h = { 'Accept': 'text/plain', 'X-Return-Format': 'text' };
-    if (key) h['Authorization'] = 'Bearer ' + key;
-    const r = await fetch('https://r.jina.ai/https://example.com', { headers: h, signal: AbortSignal.timeout(15000) });
-    if (r.ok) out.innerHTML = '<div class="test-result ok">\u2713 Jina works' + (key ? ' with your key' : ' keyless') + '</div>';
-    else out.innerHTML = '<div class="test-result err">\u2717 HTTP ' + r.status + (r.status === 401 && !key ? ' \u2014 get a free key at jina.ai' : '') + '</div>';
-  } catch(e) {
-    out.innerHTML = '<div class="test-result err">\u2717 ' + e.message + '</div>';
+    $('#keysWarning').classList.remove('hidden');
+    out.innerHTML = '<div class="test-result err">✗ Offline at ' + base + ' — run <b>npm install && npm start</b> in the project folder</div>';
   }
 }
 
@@ -1067,17 +971,14 @@ function dl(name,text){
 }
 
 function aiImprove(){
-  const s=JSON.parse(localStorage.getItem(LS_S)||'{}');
-  if(!s.key){toast('Add Gemini key in Settings'); openSettings(); return;}
   doImprove();
 }
 async function doImprove(){
-  const s=JSON.parse(localStorage.getItem(LS_S)||'{}');
   const btn=$('#aiBtn'); btn.disabled=true;
   $('#aiStatus').textContent='⏳ Improving...';
   const meta=`Expert Prompt Engineer: improve this prompt for code/design tools. Keep all real data. Add professional detail (hierarchy, microcopy, SEO, accessibility). Return ONLY the improved prompt:\n----\n${lastPrompts[currentTab]}`;
   try{
-    const res = await callGemini(s.key, {contents:[{parts:[{text:meta}]}]});
+    const res = await callGemini({contents:[{parts:[{text:meta}]}]});
     const out = res.ok ? res.data.candidates?.[0]?.content?.parts?.[0]?.text : null;
     if(out){ lastPrompts[currentTab]=out; $('#promptOut').textContent=out; $('#aiStatus').textContent=''; toast('✨ Improved via ' + res.model); }
     else $('#aiStatus').textContent='⚠ ' + String(res.error||'No response').slice(0,80);
@@ -1129,41 +1030,26 @@ function exportAll(){ dl('openprompt-history.json', JSON.stringify(getHist(),nul
 
 function openSettings(){
   $('#overlay').classList.add('open');
-  const s = JSON.parse(localStorage.getItem(LS_S) || '{}');
-  $('#set_serp').value = s.serp || '';
-  $('#set_gapiKey').value = s.gapiKey || '';
-  $('#set_gse').value = s.gse || '';
-  $('#set_key').value = s.key || '';
+  const s = getSettings();
+  $('#set_proxy').value = s.proxyUrl || '';
   $('#set_jina').checked = s.jina !== false;
-  $('#set_jinakey').value = s.jinaKey || '';
   updateKeyStatus();
-  const hasAny = s.serp || s.key || (s.gapiKey && s.gse);
-  $('#keysWarning').classList.toggle('hidden', hasAny);
+  testBackend(); // auto-check backend health + configured keys
 }
 function updateKeyStatus(){
-  const s = JSON.parse(localStorage.getItem(LS_S) || '{}');
-  const setStatus = (id, current, saved) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (current && current === saved) { el.className = 'key-status saved'; el.textContent = '✓ saved'; }
-    else if (current && !saved) { el.className = 'key-status'; el.style.color = 'var(--warn)'; el.textContent = '⚠ unsaved'; }
-    else { el.className = 'key-status empty'; el.textContent = '✗ not saved'; }
-  };
-  setStatus('serpStatus', $('#set_serp').value.trim(), s.serp);
-  setStatus('gapiKeyStatus', $('#set_gapiKey').value.trim(), s.gapiKey);
-  setStatus('gseStatus', $('#set_gse').value.trim(), s.gse);
-  setStatus('gemStatus', $('#set_key').value.trim(), s.key);
-  setStatus('jinaStatus', $('#set_jinakey').value.trim(), s.jinaKey);
+  const cur = $('#set_proxy').value.trim().replace(/\/+$/,'');
+  const el = $('#proxyStatus');
+  if (!el) return;
+  if (cur && cur === apiBase()) { el.className = 'key-status saved'; el.style.color=''; el.textContent = '✓ saved'; }
+  else if (cur) { el.className = 'key-status'; el.style.color = 'var(--warn)'; el.textContent = '⚠ unsaved'; }
+  else { el.className = 'key-status empty'; el.style.color=''; el.textContent = 'default: ' + PROXY_DEFAULT; }
 }
 function closeSettings(){$('#overlay').classList.remove('open');}
 function saveSettings(){
+  // Keys no longer live in the browser — saving replaces the old key-shaped blob entirely.
   const data = {
-    serp: $('#set_serp').value.trim(),
-    gapiKey: $('#set_gapiKey').value.trim(),
-    gse: $('#set_gse').value.trim(),
-    key: $('#set_key').value.trim(),
-    jina: $('#set_jina').checked,
-    jinaKey: $('#set_jinakey').value.trim()
+    proxyUrl: $('#set_proxy').value.trim(),
+    jina: $('#set_jina').checked
   };
   try {
     localStorage.setItem(LS_S, JSON.stringify(data));
@@ -1180,14 +1066,11 @@ function saveSettings(){
   }
 }
 function clearAllKeys(){
-  if(!confirm('Clear all saved API keys?')) return;
+  if(!confirm('Reset proxy URL to default (' + PROXY_DEFAULT + ')?')) return;
   localStorage.removeItem(LS_S);
-  $('#set_serp').value = '';
-  $('#set_gapiKey').value = '';
-  $('#set_gse').value = '';
-  $('#set_key').value = '';
+  $('#set_proxy').value = '';
   updateKeyStatus();
-  toast('🗑 All keys cleared');
+  toast('↺ Settings reset to defaults');
 }
 
 function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show');

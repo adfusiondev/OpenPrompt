@@ -115,8 +115,9 @@ app.get('/api/serpapi', async (req, res) => {
    Server-side r.jina.ai reader. Attaches JINA_API_KEY when configured
    (r.jina.ai now rejects many keyless requests). */
 app.post('/api/jina', async (req, res) => {
-  const u = assertHttpUrl((req.body || {}).url);
-  if (!u) return fail(res, 400, 'Body must be JSON: {"url": "https://..."}');
+  const b = req.body || {};
+  const u = assertHttpUrl(b.targetUrl || b.url); // targetUrl per frontend contract; url kept as alias
+  if (!u) return fail(res, 400, 'Body must be JSON: {"targetUrl": "https://..."}');
 
   const headers = { 'User-Agent': UA };
   if (process.env.JINA_API_KEY) headers.Authorization = 'Bearer ' + process.env.JINA_API_KEY;
@@ -136,7 +137,7 @@ app.post('/api/jina', async (req, res) => {
   }
 });
 
-/* ---------- POST /api/gemini  body: {"model": "...", "payload": {...}} ----------
+/* ---------- POST /api/gemini  body: {"model": "...", "prompt": <string|object>} ----------
    Relays generateContent calls with GEMINI_API_KEY attached. Upstream HTTP
    status is relayed verbatim so the client's model-fallback chain keeps
    working (it advances to the next model on 404/"not available"). */
@@ -144,12 +145,15 @@ app.post('/api/gemini', async (req, res) => {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return fail(res, 503, 'GEMINI_API_KEY not configured on the proxy server (.env)', 'NO_KEY');
 
-  const { model, payload } = req.body || {};
+  const b = req.body || {};
+  const model = b.model;
+  let payload = b.payload !== undefined ? b.payload : b.prompt; // prompt per frontend contract
   if (!model || typeof model !== 'string' || !/^[\w.\-]+$/.test(model)) {
-    return fail(res, 400, 'Body must be JSON: {"model": "...", "payload": {...}}');
+    return fail(res, 400, 'Body must be JSON: {"model": "...", "prompt": ...}');
   }
+  if (typeof payload === 'string') payload = { contents: [{ parts: [{ text: payload }] }] };
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return fail(res, 400, 'Missing Gemini payload object');
+    return fail(res, 400, 'Missing Gemini prompt/payload object');
   }
 
   try {
