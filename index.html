@@ -987,7 +987,11 @@ async function extractCompetitors(c){
       address: p.address || '',
       phone: p.phone || ''
     }));
-    logLine('  ✓ Found ' + c.competitors.length + ' competitors', 'ok');
+    if(c.competitors.length === 0){
+      logLine('⊘ No competitors found — outreach will use USP/patient insights fallback', 'warn');
+    } else {
+      logLine('  ✓ Found ' + c.competitors.length + ' competitors', 'ok');
+    }
     renderCompetitorsCard(c);
     await generateGapAnalysis(c);
   } catch(e){ logLine('Competitors error: ' + e.message, 'warn'); }
@@ -1067,20 +1071,24 @@ function buildOutreach(c, opts){
         posStrength: '\u2713 ' + topStrength,
         posGap: '\u26a0 ' + mainGap,
         posOpp: '\ud83c\udfaf ' + mainOpp,
+        uspLine: function(u){ return '\u2713 Your edge: ' + u; },
+        insightLine: function(s){ return '\ud83d\udcac What patients say: ' + s; },
         cta: '\n\nI\'ve prepared a free landing page design proposal that turns your strengths into a visible competitive advantage online. Would you like me to send the preview? \ud83d\ude4f'
       },
       ar: {
-        greeting: '\ud83d\udc4b \u0645\u0631\u062d\u0628\u064b\u0627 \u0628\u0641\u0631\u064a\u0642 ' + name + ',\n\n\u0635\u0627\u062f\u0642\u062a\u064f \u0645\u0644\u0641\u0643\u0645 \u0639\u0644\u0649 \u062e\u0631\u0627\u0626\u0637 Google \u0641\u064a ' + city + '.' + (c.rating ? ' \u062a\u0642\u064a\u064a\u0645\u0643\u0645 ' + c.rating + '\u2b50 \u0645\u0646 ' + (c.reviews || '\u2014') + ' \u0645\u0631\u0627\u062c\u0639\u0629.' : ''),
+        greeting: '\ud83d\udc4b \u0645\u0631\u062d\u0628\u064b\u0627 \u0628\u0641\u0631\u064a\u0642 ' + name + ',\n\n\u0635\u0627\u062f\u0641\u062a\u064f \u0645\u0644\u0641\u0643\u0645 \u0639\u0644\u0649 \u062e\u0631\u0627\u0626\u0637 Google \u0641\u064a ' + city + '.' + (c.rating ? ' \u062a\u0642\u064a\u064a\u0645\u0643\u0645 ' + c.rating + '\u2b50 \u0645\u0646 ' + (c.reviews || '\u2014') + ' \u0645\u0631\u0627\u062c\u0639\u0629.' : ''),
         observation: hasWebsite
-          ? '\u0644\u0627\u062d\u0638\u0637\u062a\u064f \u0623\u0646 \u062d\u0636\u0648\u0631\u0643\u0645 \u0627\u0644\u0631\u0642\u0645\u064a \u064a\u0645\u0643\u0646 \u062a\u0639\u0632\u064a\u0632\u0647 \u0628\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u062a\u0633\u0648\u064a\u0642\u064a\u0629 \u0645\u0631\u0643\u0651\u0632\u0629 \u0639\u0644\u0649 \u0627\u0644\u062a\u062d\u0648\u064a\u0644.'
-          : '\u0644\u0627\u062d\u0638\u0637\u062a\u064f \u0623\u0646\u0643\u0645 \u0644\u0627 \u062a\u0645\u0644\u0643\u0648\u0646 \u0645\u0648\u0642\u0639\u064b\u0627 \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u064b\u0627 \u0631\u0633\u0645\u064a\u064b\u0627 \u062d\u062a\u0649 \u0627\u0644\u0622\u0646.',
+          ? '\u0644\u0627\u062d\u0638\u062a\u064f \u0623\u0646 \u062d\u0636\u0648\u0631\u0643\u0645 \u0627\u0644\u0631\u0642\u0645\u064a \u064a\u0645\u0643\u0646 \u062a\u0639\u0632\u064a\u0632\u0647 \u0628\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u062a\u0633\u0648\u064a\u0642\u064a\u0629 \u0645\u0631\u0643\u0651\u0632\u0629 \u0639\u0644\u0649 \u0627\u0644\u062a\u062d\u0648\u064a\u0644.'
+          : '\u0644\u0627\u062d\u0638\u062a\u064f \u0623\u0646\u0643\u0645 \u0644\u0627 \u062a\u0645\u0644\u0643\u0648\u0646 \u0645\u0648\u0642\u0639\u064b\u0627 \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u064b\u0627 \u0631\u0633\u0645\u064a\u064b\u0627 \u062d\u062a\u0649 \u0627\u0644\u0622\u0646.',
         compTitle: '\n\n\u0627\u0644\u0645\u0634\u0647\u062f \u0627\u0644\u062a\u0646\u0627\u0641\u0633\u064a \u2014 \u0623\u0636\u0639 ' + comps.length + ' \u0645\u0646\u0627\u0641\u0633\u064a\u0646 \u0645\u062d\u0644\u064a\u064a\u0646 \u0644\u0643\u0645:',
         compLine: function(x){ return '- ' + x.name + ': ' + (x.rating||'?') + '\u2b50 (' + (x.reviews||'?') + ' \u0645\u0631\u0627\u062c\u0639\u0629\u060c ' + (x.website ? '\u0644\u062f\u064a\u0647' : '\u0628\u062f\u0648\u0646') + ' \u0645\u0648\u0642\u0639)'; },
         posTitle: '\n\n\u0645\u0648\u0642\u0639\u0643\u0645 \u0627\u0644\u062d\u0627\u0644\u064a:',
         posStrength: '\u2713 ' + topStrength,
         posGap: '\u26a0 ' + mainGap,
         posOpp: '\ud83c\udfaf ' + mainOpp,
-        cta: '\n\n\u062c\u0647\u0612\u0632\u062a\u064f \u0644\u0643\u0645 \u0645\u0642\u062a\u0631\u062d \u062a\u0635\u0645\u064a\u0645 \u0645\u062c\u0627\u0646\u064a \u0644\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u0627\u062d\u062a\u0631\u0627\u0641\u064a\u0629 \u062a\u062d\u0648\u0617\u0644 \u0646\u0642\u0637 \u0642\u0648\u062a\u0643\u0645 \u0625\u0644\u0649 \u0645\u064a\u0632\u0629 \u062a\u0646\u0627\u0641\u0633\u064a\u0629 \u0645\u0631\u0626\u064a\u0629 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a. \u0647\u0644 \u064a\u0645\u0643\u0646\u0646\u064a \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629\u061f \ud83d\ude4f'
+        uspLine: function(u){ return '\u2713 \u0645\u064a\u0632\u062a\u0643\u0645: ' + u; },
+        insightLine: function(s){ return '\ud83d\udcac \u0645\u0645\u0627 \u064a\u0642\u0648\u0644\u0647 \u0639\u0645\u0644\u0627\u0626\u0643\u0645: ' + s; },
+        cta: '\n\n\u062c\u0647\u0651\u0632\u062a\u064f \u0644\u0643\u0645 \u0645\u0642\u062a\u0631\u062d \u062a\u0635\u0645\u064a\u0645 \u0645\u062c\u0627\u0646\u064a \u0644\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u0627\u062d\u062a\u0631\u0627\u0641\u064a\u0629 \u062a\u062d\u0648\u0651\u0644 \u0646\u0642\u0627\u0637 \u0642\u0648\u062a\u0643\u0645 \u0625\u0644\u0649 \u0645\u064a\u0632\u0629 \u062a\u0646\u0627\u0641\u0633\u064a\u0629 \u0645\u0631\u0626\u064a\u0629 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a. \u0647\u0644 \u064a\u0645\u0643\u0646\u0646\u064a \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629\u061f \ud83d\ude4f'
       },
       fr: {
         greeting: '\ud83d\udc4b Bonjour \u00e0 l\'\u00e9quipe de ' + name + ',\n\nJ\'ai trouv\u00e9 votre fiche Google Maps \u00e0 ' + city + '.' + (ratingLine ? ' Vous avez une note de ' + ratingLine + '.' : ''),
@@ -1093,20 +1101,30 @@ function buildOutreach(c, opts){
         posStrength: '\u2713 ' + topStrength,
         posGap: '\u26a0 ' + mainGap,
         posOpp: '\ud83c\udfaf ' + mainOpp,
+        uspLine: function(u){ return '\u2713 Votre atout : ' + u; },
+        insightLine: function(s){ return '\ud83d\udcac Ce que disent vos clients : ' + s; },
         cta: '\n\nJ\'ai pr\u00e9par\u00e9 pour vous une proposition de design gratuite pour une landing page qui transforme vos atouts en avantage concurrentiel visible en ligne. Puis-je vous envoyer l\'aper\u00e7u ? \ud83d\ude4f'
       }
     };
 
     const t = templates[lang] || templates.en;
     let msg = t.greeting + '\n\n' + t.observation;
-    if (comps.length > 0) {
+    const hasComps = comps.length > 0;
+    const hasGap = !!gap;
+    if (hasComps) {
       msg += t.compTitle + '\n' + comps.map(t.compLine).join('\n');
     }
-    if (gap) {
+    if (hasGap) {
       msg += t.posTitle + '\n' + t.posStrength + '\n' + t.posGap + '\n' + t.posOpp;
     }
+    if (!hasComps && !hasGap) {
+      if (c.selectedUSP && t.uspLine) msg += '\n\n' + t.uspLine(c.selectedUSP);
+      const firstStrength = c.insights && c.insights.strengths && c.insights.strengths[0];
+      if (firstStrength && t.insightLine) msg += '\n' + t.insightLine(firstStrength);
+    } else if (c.selectedUSP && t.uspLine) {
+      msg += '\n' + t.uspLine(c.selectedUSP);
+    }
     msg += t.cta;
-    if (c.selectedUSP) msg += '\n\n\u2728 ' + c.selectedUSP;
     return msg;
   } catch(e) {
     return '\ud83d\udc4b Hi team at ' + ((c && c.name) || 'your business') + ',\n\nI found your listing on Google Maps. I\'ve prepared a free landing page design proposal. Would you like me to send the preview? \ud83d\ude4f';

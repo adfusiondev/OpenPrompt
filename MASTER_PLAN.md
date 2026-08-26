@@ -21,6 +21,7 @@
 | 6 | Prospector Mode (البحث عن العملاء) | 30-45 دقيقة | 95% | ✅ |
 | 7 | Competitor Gap Analysis + Outreach Language | 45-60 دقيقة | 90% | ✅ |
 | 7.5 | Unified Outreach Templates (AR/EN/FR) | 15 دقيقة | 100% | ✅ |
+| 7.6 | Outreach Richness Guarantee + Arabic Typo Fix | 15 دقيقة | 100% | ✅ |
 | 8 | Unified Mode Switcher (Extract ⇄ Prospector) | 15 دقيقة | 100% | ✅ |
 
 ---
@@ -404,6 +405,29 @@ git push origin main --tags
 - [ ] رسالة AR تحتوي على المشهد التنافسي
 - [ ] رسالة FR تحتوي على المشهد التنافسي
 - [ ] رسالة EN تحتوي على المشهد التنافسي
+- [ ] لا أخطاء في Console
+
+---
+
+# 🔵 المرحلة 7.6 — Outreach Richness Guarantee + Arabic Typo Fix
+
+## 🎯 الهدف
+إصلاح أخطاء الكتابة العربية، وإضافة ضمان أن رسالة التواصل غنية بالمحتوى حتى بدون بيانات منافسين.
+
+## ⏱️ الوقت: 15 دقيقة | 📈 النجاح: 100%
+
+## التغييرات
+- ✅ إصلاح أخطاء الكتابة العربية: صادقتُ→صادفتُ، لاحظطتُ→لاحظتُ، جهؒزتُ→جهّزتُ، تحوؗل→تحوّل، نقط→نقاط
+- ✅ إصلاح علامات Unicode عربية مُفسدة (U+0612 ؒ، U+0617 ؗ)
+- ✅ إضافة `uspLine` + `insightLine` fallback للقوالب (EN/AR/FR)
+- ✅ منطق `buildOutreach`: عند عدم وجود منافسين/فجوات → USP + أقوال المرضى ك╴.mk بديل
+- ✅ `logLine('⊘ No competitors found...')` تحذير عند 0 منافسين
+- ✅ التحقق: جميع القوالب الثلاثة تحتوي competitor + position + uspLine + insightLine
+
+## ✅ معايير النجاح
+- [ ] لا أخطاء كتابة عربية في رسالة EN/AR/FR
+- [ ] رسالة بدون منافسين تحتوي USP + أقوال المرضى
+- [ ] رسالة مع منافسين تحتوي قسم المنافسين + الموقع + USP
 - [ ] لا أخطاء في Console
 
 ---
