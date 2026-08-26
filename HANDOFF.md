@@ -1,6 +1,8 @@
 # HANDOFF — OpenPrompt
 
-## Last Session Summary (P0 implementation → v2.0.0-p0)
+## Last Session Summary (P0 implementation + v2.0.1 bug-fix patch)
+
+### Phase 1 — P0 features (v2.0.0-p0)
 
 Implemented the full P0 feature set from `MASTER_PLAN.md` as three surgical,
 individually-committed edits to `index.html` (no other code files touched,
@@ -19,8 +21,18 @@ traffic through `callGemini()` (model fallback intact), no new localStorage keys
 trilingual outreach branches untouched, DOM-safe rendering (`createElement` +
 `textContent` for AI-generated strings), every AI failure non-blocking.
 
-## Verified Smoke Tests (browser, file:// load)
+### Phase 2 — Bug-fix patch (v2.0.1, stable, live on Vercel)
 
+| Commit | Fix |
+|---|---|
+| `13b3824` | Fix 1: URL resolution hardening (429 retry, server-side Jina fallback, logging, diagnostic tip) |
+| `13b3824` | Fix 2: Gemini 429/503 model fallback chain in `callGemini()` |
+| `13b3824` | Fix 3: Insights generation guard (requires `client.prof && client.city`) |
+| `pushed` | Docs: v2.0.1 stable release documentation (`PROJECT_STATUS.md`, `HANDOFF.md`) |
+
+## Verified Smoke Tests
+
+### Local (browser, file:// load) — P0 features
 - **Task 1**: `node --check` on extracted inline script passed; buttons render in `#s3` row.
 - **Task 2 (12 assertions passed)**: `#uspCard` hidden by default; 3 radios render;
   selection sets `client.selectedUSP`; USP present in Landing/Identity/Outreach
@@ -31,9 +43,13 @@ trilingual outreach branches untouched, DOM-safe rendering (`createElement` +
   only (between VISUAL TONE and SECTIONS); Identity/Outreach clean; USP suffix still in
   Outreach; no-insights landing byte-identical; partial insights render only present
   groups; card hides on empty insights.
-- **Console**: only pre-existing Chromium `file://` unique-origin artifact; zero JS errors from new code.
-- **Not yet done**: live end-to-end run against the real proxy with API keys
-  (`npm start` + a real Maps URL) and history round-trip across page reload — see quickstart below.
+
+### Live (Vercel, open-prompt-three.vercel.app) — v2.0.1 fixes
+- **Fix 1**: Short URL `goo.gl/VWmiLeyy4k6d3UA78` resolved via proxy → full Maps URL ✓
+- **Fix 2**: `callGemini` advanced through `gemini-3.6-flash` (429) → `gemini-flash-latest` (503) → `gemini-2.5-flash` (404 deprecated) — chain works ✓
+- **Fix 3**: Insights guard correctly passed when `prof` + `city` present; skipped with `⊘ Insights generation skipped: needs profession + city` when either is empty ✓
+- **End-to-end**: 5/5 fields populated (was 3/5 pre-fix); USP + insights cards rendered ✓
+- **Known limitation**: `gemini-2.5-flash` deprecated by Google — update `GEMINI_MODELS` in next maintenance patch
 
 ## Instructions for the Next Agent Session
 
@@ -50,5 +66,7 @@ trilingual outreach branches untouched, DOM-safe rendering (`createElement` +
 5. **Never**: add frontend dependencies, move keys to the browser, call upstream
    APIs directly from `index.html`, change the history item shape incompatibly,
    or commit `.env` / real keys.
-6. **Next work**: Phase 5 items in `PROJECT_STATUS.md` — one feature per session,
+6. **Known maintenance**: `gemini-2.5-flash` in `GEMINI_MODELS` is deprecated (HTTP 404).
+   Replace with a current model ID in the next small patch.
+7. **Next work**: Phase 5 items in `PROJECT_STATUS.md` — one feature per session,
    spec-first, commit per phase.

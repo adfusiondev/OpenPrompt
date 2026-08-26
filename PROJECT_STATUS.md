@@ -1,6 +1,16 @@
 # PROJECT_STATUS — OpenPrompt
 
-## Current Version: `v2.0.1-p0`
+## Current Version: `v2.0.1` (stable, live on Vercel)
+
+### v2.0.1 — Bug-fix patch (verified live 2026-08-26)
+
+| Fix | What | Verified |
+|---|---|---|
+| Fix 1 — URL Resolution Hardening | 429 retry with 2s backoff, server-side Jina fallback (`POST /api/jina`), `logLine` on all silent paths, diagnostic tip on total failure | ✓ live (Vercel) |
+| Fix 2 — Gemini 429/503 Model Fallback | `callGemini` advances to next model on HTTP 429 and 503-overload ("high demand", "overload", "resource exhausted", "temporarily unavailable") | ✓ live (Vercel) |
+| Fix 3 — Insights Generation Guard | Mirrors USP gate: requires `client.prof && client.city` before calling Gemini; logs skip reason; prevents junk `client.insights` | ✓ live (Vercel) |
+
+**Known limitation (maintenance cycle):** `gemini-2.5-flash` in `GEMINI_MODELS` is deprecated by Google (HTTP 404). Update the model list in a future patch.
 
 ## Active Branch: `main`
 
@@ -45,5 +55,5 @@
 | Chrome Extension (generate from Maps pages) | 🟢 Future |
 | PDF Proposal export | 🟢 Future |
 
-**Rule:** do not start Phase 5 before P0 is validated with 3 real clients.
+**Rule:** do not start Phase 5 before P0 is validated with 3 real clients. Current stable: v2.0.1.
 One small, single-feature prompt per session (see MASTER_PLAN.md golden rules).
