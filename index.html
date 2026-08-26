@@ -290,6 +290,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn ghost" id="studioBtn" onclick="openInAIStudio()">🎓 Open in AI Studio</button>
       <button class="btn ghost" onclick="downloadCurrent()">↓ Export full client report</button>
       <button class="btn ghost" id="aiBtn" onclick="aiImprove()">✨ Improve with AI</button>
+      <button class="btn ghost hidden" id="waBtn" onclick="sendWhatsApp()">📲 Send via WhatsApp</button>
       <button class="btn ghost" onclick="go(0)">+ New client</button>
     </div>
     <div class="status" id="aiStatus"></div>
@@ -1648,6 +1649,7 @@ function showTab(key, el){
   if(el) el.classList.add('active');
   $('#promptOut').textContent=lastPrompts[key]||'';
   $('#aiBtn').style.display = key==='outreach' ? 'none' : '';
+  $('#waBtn').className = (key==='outreach' && client.phone) ? 'btn ghost' : 'btn ghost hidden';
 }
 function copyCurrent(){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>toast('⧉ Copied'));
@@ -1851,6 +1853,26 @@ function copyLeadsTSV(){
 function clearLeads(){
   if(!confirm('Clear all leads?')) return;
   localStorage.removeItem(LS_L); renderLeads(); toast('Leads cleared');
+}
+
+function normalizePhone(phone){
+  let d=phone.replace(/\D/g,'');
+  if(d.startsWith('00')) d=d.slice(2);
+  if(d.startsWith('0')){ toast('Add country code to the phone first (e.g. +966...)'); return null; }
+  if(d.length<8){ toast('Phone looks incomplete'); return null; }
+  return d;
+}
+function sendWhatsApp(){
+  const digits=normalizePhone(client.phone||'');
+  if(!digits) return;
+  const msg=lastPrompts.outreach||'';
+  const url='https://wa.me/'+digits+'?text='+encodeURIComponent(msg);
+  navigator.clipboard.writeText(msg).catch(()=>{});
+  window.open(url,'_blank');
+  toast('Opening WhatsApp...');
+  const ol=(options.outreachLang||'').slice(0,2);
+  const cl=(client.city||'').match(/\u0627\u0644\u0631\u064a\u0627\u0636|\u062f\u0628\u064a|\u0627\u0644\u0645\u0646\u0627\u0645\u0629|\u0627\u0644\u0643\u0648\u064a\u062a|\u0627\u0644\u0623\u0631\u062f\u0646/);
+  if(cl && ol!=='ar') toast('Tip: message is in '+ol.toUpperCase()+' — switch outreach language if needed');
 }
 
 go(0);
