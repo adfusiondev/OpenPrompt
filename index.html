@@ -1033,30 +1033,76 @@ function renderGapAnalysis(c){
   box.appendChild(div);
 }
 
-/* ── Outreach Builder (separate from page language) ── */
+/* ── Outreach Builder (unified AR/EN/FR with competitor data) ── */
 function buildOutreach(c, opts){
-  const lang = opts.outreachLang || 'ar';
-  const name = c.name || 'your clinic';
-  const city = c.city || 'your city';
-  const ratingLine = c.rating ? c.rating + '⭐ (' + (c.reviews||'?') + ' reviews)' : '';
-  const webNote = c.website==='no' ? 'without a website' : 'with a web presence';
-  const hasComps = c.competitors && c.competitors.length;
-  const compBlock = hasComps
-    ? '\n\nCOMPETITIVE LANDSCAPE:\nYour top ' + c.competitors.length + ' local competitors:\n' + c.competitors.map(comp => '- ' + comp.name + ': ' + comp.rating + '⭐ (' + comp.reviews + ' reviews, ' + (comp.website ? 'has' : 'NO') + ' website)').join('\n')
-    : '';
-  const posBlock = c.gapAnalysis
-    ? '\nYOUR POSITION:\n✓ ' + (c.gapAnalysis.strengths||[])[0] + '\n⚠ ' + (c.gapAnalysis.gaps||[])[0] + '\n🎯 ' + (c.gapAnalysis.opportunities||[])[0]
-    : '';
-  let msg = '';
-  if(lang === 'en'){
-    msg = '👋 Hi team at ' + name + ',\n\nI found your listing on Google Maps in ' + city + '.' + (ratingLine ? ' You have a ' + ratingLine + ' rating.' : '') + ' I noticed ' + webNote + '.' + compBlock + posBlock + '\n\nI\'ve prepared a free landing page design proposal that turns your strengths into a visible competitive advantage online. Would you like me to send the preview? 🙏';
-  } else if(lang === 'ar'){
-    msg = '👋 مرحبًا بفريق ' + name + '\n\nصادقتُ ملفكم على خرائط Google في ' + city + '.' + (c.rating ? ' تقييمكم ' + c.rating + '⭐ من ' + (c.reviews||'—') + ' مراجعة.' : '') + ' لاحظطتُ ' + (c.website==='no' ? 'أنكم لا تملكون موقعًا رسميًا حتى الآن.' : 'أن حضوركم الرقمي يمكن تعزيزه.') + '\n\nجهّزتُ لكم مقترح تصميم أولي مجانًي لصفحة هبوط احترافية. هل يمكنني إرسال المعاينة؟ 🙏';
-  } else if(lang === 'fr'){
-    msg = '👋 Bonjour à l\'\u00e9quipe de ' + name + ',\n\nJ\'ai trouvé votre fiche Google Maps à ' + city + '.' + (ratingLine ? ' Vous avez une note de ' + ratingLine + '.' : '') + ' J\'ai remarqué que ' + (c.website==='no' ? 'vous n\'avez pas encore de site officiel.' : 'votre présence en ligne pourrait être renforcée.') + compBlock + posBlock + '\n\nJ\'ai préparé une proposition de design gratuite pour une landing page qui transforme vos atouts en avantage concurrentiel visible en ligne. Puis-je envoyer l\'aperçu ? 🙏';
+  try {
+    const lang = opts.outreachLang || 'en';
+    const name = c.name || 'your business';
+    const city = c.city || 'your city';
+    const hasWebsite = c.website === 'yes';
+    const comps = c.competitors || [];
+    const gap = c.gapAnalysis || null;
+    const topStrength = (gap && gap.strengths && gap.strengths[0]) || 'strong local reputation';
+    const mainGap = (gap && gap.gaps && gap.gaps[0]) || 'limited online visibility';
+    const mainOpp = (gap && gap.opportunities && gap.opportunities[0]) || 'convert local search traffic into bookings';
+    const ratingLine = c.rating ? c.rating + '\u2b50 (' + (c.reviews || '?') + ' reviews)' : '';
+
+    const templates = {
+      en: {
+        greeting: '\ud83d\udc4b Hi team at ' + name + ',\n\nI found your listing on Google Maps in ' + city + '.' + (ratingLine ? ' You have a ' + ratingLine + ' rating.' : ''),
+        observation: hasWebsite
+          ? 'I noticed your web presence could be stronger with a conversion-focused landing page.'
+          : 'I noticed you don\'t have an official website yet.',
+        compTitle: '\n\nCOMPETITIVE LANDSCAPE \u2014 Your top ' + comps.length + ' local competitors:',
+        compLine: function(x){ return '- ' + x.name + ': ' + (x.rating||'?') + '\u2b50 (' + (x.reviews||'?') + ' reviews, ' + (x.website ? 'HAS' : 'NO') + ' website)'; },
+        posTitle: '\n\nYOUR POSITION:',
+        posStrength: '\u2713 ' + topStrength,
+        posGap: '\u26a0 ' + mainGap,
+        posOpp: '\ud83c\udfaf ' + mainOpp,
+        cta: '\n\nI\'ve prepared a free landing page design proposal that turns your strengths into a visible competitive advantage online. Would you like me to send the preview? \ud83d\ude4f'
+      },
+      ar: {
+        greeting: '\ud83d\udc4b \u0645\u0631\u062d\u0628\u064b\u0627 \u0628\u0641\u0631\u064a\u0642 ' + name + ',\n\n\u0635\u0627\u062f\u0642\u062a\u064f \u0645\u0644\u0641\u0643\u0645 \u0639\u0644\u0649 \u062e\u0631\u0627\u0626\u0637 Google \u0641\u064a ' + city + '.' + (c.rating ? ' \u062a\u0642\u064a\u064a\u0645\u0643\u0645 ' + c.rating + '\u2b50 \u0645\u0646 ' + (c.reviews || '\u2014') + ' \u0645\u0631\u0627\u062c\u0639\u0629.' : ''),
+        observation: hasWebsite
+          ? '\u0644\u0627\u062d\u0638\u0637\u062a\u064f \u0623\u0646 \u062d\u0636\u0648\u0631\u0643\u0645 \u0627\u0644\u0631\u0642\u0645\u064a \u064a\u0645\u0643\u0646 \u062a\u0639\u0632\u064a\u0632\u0647 \u0628\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u062a\u0633\u0648\u064a\u0642\u064a\u0629 \u0645\u0631\u0643\u0651\u0632\u0629 \u0639\u0644\u0649 \u0627\u0644\u062a\u062d\u0648\u064a\u0644.'
+          : '\u0644\u0627\u062d\u0638\u0637\u062a\u064f \u0623\u0646\u0643\u0645 \u0644\u0627 \u062a\u0645\u0644\u0643\u0648\u0646 \u0645\u0648\u0642\u0639\u064b\u0627 \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u064b\u0627 \u0631\u0633\u0645\u064a\u064b\u0627 \u062d\u062a\u0649 \u0627\u0644\u0622\u0646.',
+        compTitle: '\n\n\u0627\u0644\u0645\u0634\u0647\u062f \u0627\u0644\u062a\u0646\u0627\u0641\u0633\u064a \u2014 \u0623\u0636\u0639 ' + comps.length + ' \u0645\u0646\u0627\u0641\u0633\u064a\u0646 \u0645\u062d\u0644\u064a\u064a\u0646 \u0644\u0643\u0645:',
+        compLine: function(x){ return '- ' + x.name + ': ' + (x.rating||'?') + '\u2b50 (' + (x.reviews||'?') + ' \u0645\u0631\u0627\u062c\u0639\u0629\u060c ' + (x.website ? '\u0644\u062f\u064a\u0647' : '\u0628\u062f\u0648\u0646') + ' \u0645\u0648\u0642\u0639)'; },
+        posTitle: '\n\n\u0645\u0648\u0642\u0639\u0643\u0645 \u0627\u0644\u062d\u0627\u0644\u064a:',
+        posStrength: '\u2713 ' + topStrength,
+        posGap: '\u26a0 ' + mainGap,
+        posOpp: '\ud83c\udfaf ' + mainOpp,
+        cta: '\n\n\u062c\u0647\u0612\u0632\u062a\u064f \u0644\u0643\u0645 \u0645\u0642\u062a\u0631\u062d \u062a\u0635\u0645\u064a\u0645 \u0645\u062c\u0627\u0646\u064a \u0644\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u0627\u062d\u062a\u0631\u0627\u0641\u064a\u0629 \u062a\u062d\u0648\u0617\u0644 \u0646\u0642\u0637 \u0642\u0648\u062a\u0643\u0645 \u0625\u0644\u0649 \u0645\u064a\u0632\u0629 \u062a\u0646\u0627\u0641\u0633\u064a\u0629 \u0645\u0631\u0626\u064a\u0629 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a. \u0647\u0644 \u064a\u0645\u0643\u0646\u0646\u064a \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629\u061f \ud83d\ude4f'
+      },
+      fr: {
+        greeting: '\ud83d\udc4b Bonjour \u00e0 l\'\u00e9quipe de ' + name + ',\n\nJ\'ai trouv\u00e9 votre fiche Google Maps \u00e0 ' + city + '.' + (ratingLine ? ' Vous avez une note de ' + ratingLine + '.' : ''),
+        observation: hasWebsite
+          ? 'J\'ai remarqu\u00e9 que votre pr\u00e9sence en ligne pourrait \u00eatre renforc\u00e9e par une landing page orient\u00e9e conversion.'
+          : 'J\'ai remarqu\u00e9 que vous n\'avez pas encore de site web officiel.',
+        compTitle: '\n\nPAYSAGE CONCURRENTIEL \u2014 Vos ' + comps.length + ' principaux concurrents locaux :',
+        compLine: function(x){ return '- ' + x.name + ': ' + (x.rating||'?') + '\u2b50 (' + (x.reviews||'?') + ' avis, ' + (x.website ? 'AVEC' : 'SANS') + ' site web)'; },
+        posTitle: '\n\nVOTRE POSITION :',
+        posStrength: '\u2713 ' + topStrength,
+        posGap: '\u26a0 ' + mainGap,
+        posOpp: '\ud83c\udfaf ' + mainOpp,
+        cta: '\n\nJ\'ai pr\u00e9par\u00e9 pour vous une proposition de design gratuite pour une landing page qui transforme vos atouts en avantage concurrentiel visible en ligne. Puis-je vous envoyer l\'aper\u00e7u ? \ud83d\ude4f'
+      }
+    };
+
+    const t = templates[lang] || templates.en;
+    let msg = t.greeting + '\n\n' + t.observation;
+    if (comps.length > 0) {
+      msg += t.compTitle + '\n' + comps.map(t.compLine).join('\n');
+    }
+    if (gap) {
+      msg += t.posTitle + '\n' + t.posStrength + '\n' + t.posGap + '\n' + t.posOpp;
+    }
+    msg += t.cta;
+    if (c.selectedUSP) msg += '\n\n\u2728 ' + c.selectedUSP;
+    return msg;
+  } catch(e) {
+    return '\ud83d\udc4b Hi team at ' + ((c && c.name) || 'your business') + ',\n\nI found your listing on Google Maps. I\'ve prepared a free landing page design proposal. Would you like me to send the preview? \ud83d\ude4f';
   }
-  if(c.selectedUSP) msg += '\n\n✨ ' + c.selectedUSP;
-  return msg;
 }
 
 function mergeData(existing, newData){

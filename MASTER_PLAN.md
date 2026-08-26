@@ -20,6 +20,7 @@
 | 5 | ميزات متقدمة (اختيارية) | لاحقًا | — | ⬜ |
 | 6 | Prospector Mode (البحث عن العملاء) | 30-45 دقيقة | 95% | ✅ |
 | 7 | Competitor Gap Analysis + Outreach Language | 45-60 دقيقة | 90% | ✅ |
+| 7.5 | Unified Outreach Templates (AR/EN/FR) | 15 دقيقة | 100% | ✅ |
 
 ---
 
@@ -378,6 +379,31 @@ git push origin main --tags
 - [ ] "Use →" يعبأ الخطوة 2 correctly
 - [ ] History يعرض شارة 🎯
 - [ ] الميزات القديمة لم تتأثر
+
+---
+
+# 🔵 المرحلة 7.5 — Unified Outreach Templates (AR/EN/FR)
+
+## 🎯 الهدف
+تحديث قالب buildOutreach ليضمن نظام التنافس لجميع اللغات (العربية/الإنجليزية/الفرنسية).
+
+## ⏱️ الوقت: 15 دقيقة | 📈 النجاح: 100%
+
+## التغييرات
+- ✅ إعادة بناء بين القالب buildOutreach القديم
+- ✅ قالب template موحدث للعلامات الناقصة لكل لغة
+- ✅ العربية: greeting + observation + competitive landscape + position + CTA
+- ✅ الإنجليزية: greeting + observation + competitive landscape + position + CTA
+- ✅ الفرنسية: greeting + observation + competitive landscape + position + CTA
+- ✅ تخطية الافتراضي من 'ar' إلى 'en'
+- ✅ مرجع تمام بجميع الحالات (لا مصروفات)
+- ✅ try/catch مع fallback إنجليزي عند فشل التمبوئ
+
+## ✅ معايير النجاح
+- [ ] رسالة AR تحتوي على المشهد التنافسي
+- [ ] رسالة FR تحتوي على المشهد التنافسي
+- [ ] رسالة EN تحتوي على المشهد التنافسي
+- [ ] لا أخطاء في Console
 
 ---
 
