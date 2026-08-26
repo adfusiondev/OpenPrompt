@@ -1059,10 +1059,11 @@ function buildOutreach(c, opts){
     const mainGap = (gap && gap.gaps && gap.gaps[0]) || 'limited online visibility';
     const mainOpp = (gap && gap.opportunities && gap.opportunities[0]) || 'convert local search traffic into bookings';
     const ratingLine = c.rating ? c.rating + '\u2b50 (' + (c.reviews || '?') + ' reviews)' : '';
+    const mapsLink = c.rawUrl || '';
 
     const templates = {
       en: {
-        greeting: '\ud83d\udc4b Hi team at ' + name + ',\n\nI found your listing on Google Maps in ' + city + '.' + (ratingLine ? ' You have a ' + ratingLine + ' rating.' : ''),
+        greeting: '\ud83d\udc4b Hi team at ' + name + ',\n\nI found your listing on Google Maps in ' + city + '.' + (ratingLine ? ' You have a ' + ratingLine + ' rating.' : '') + (mapsLink ? '\nGoogle Maps: ' + mapsLink : ''),
         observation: hasWebsite
           ? 'I noticed your web presence could be stronger with a conversion-focused landing page.'
           : 'I noticed you don\'t have an official website yet.',
@@ -1077,7 +1078,7 @@ function buildOutreach(c, opts){
         cta: '\n\nI\'ve prepared a free landing page design proposal that turns your strengths into a visible competitive advantage online. Would you like me to send the preview? \ud83d\ude4f'
       },
       ar: {
-        greeting: '\ud83d\udc4b \u0645\u0631\u062d\u0628\u064b\u0627 \u0628\u0641\u0631\u064a\u0642 ' + name + ',\n\n\u0635\u0627\u062f\u0641\u062a\u064f \u0645\u0644\u0641\u0643\u0645 \u0639\u0644\u0649 \u062e\u0631\u0627\u0626\u0637 Google \u0641\u064a ' + city + '.' + (c.rating ? ' \u062a\u0642\u064a\u064a\u0645\u0643\u0645 ' + c.rating + '\u2b50 \u0645\u0646 ' + (c.reviews || '\u2014') + ' \u0645\u0631\u0627\u062c\u0639\u0629.' : ''),
+        greeting: '\ud83d\udc4b \u0645\u0631\u062d\u0628\u064b\u0627 \u0628\u0641\u0631\u064a\u0642 ' + name + ',\n\n\u0635\u0627\u062f\u0641\u062a\u064f \u0645\u0644\u0641\u0643\u0645 \u0639\u0644\u0649 \u062e\u0631\u0627\u0626\u0637 Google \u0641\u064a ' + city + '.' + (c.rating ? ' \u062a\u0642\u064a\u064a\u0645\u0643\u0645 ' + c.rating + '\u2b50 \u0645\u0646 ' + (c.reviews || '\u2014') + ' \u0645\u0631\u0627\u062c\u0639\u0629.' : '') + (mapsLink ? '\n\u0635\u0627\u062f\u0641\u062a\u064f \u0645\u0644\u0641\u0643\u0645 \u0639\u0644\u0649 \u062e\u0631\u0627\u0626\u0637 Google: ' + mapsLink : ''),
         observation: hasWebsite
           ? '\u0644\u0627\u062d\u0638\u062a\u064f \u0623\u0646 \u062d\u0636\u0648\u0631\u0643\u0645 \u0627\u0644\u0631\u0642\u0645\u064a \u064a\u0645\u0643\u0646 \u062a\u0639\u0632\u064a\u0632\u0647 \u0628\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u062a\u0633\u0648\u064a\u0642\u064a\u0629 \u0645\u0631\u0643\u0651\u0632\u0629 \u0639\u0644\u0649 \u0627\u0644\u062a\u062d\u0648\u064a\u0644.'
           : '\u0644\u0627\u062d\u0638\u062a\u064f \u0623\u0646\u0643\u0645 \u0644\u0627 \u062a\u0645\u0644\u0643\u0648\u0646 \u0645\u0648\u0642\u0639\u064b\u0627 \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u064b\u0627 \u0631\u0633\u0645\u064a\u064b\u0627 \u062d\u062a\u0649 \u0627\u0644\u0622\u0646.',
@@ -1092,7 +1093,7 @@ function buildOutreach(c, opts){
         cta: '\n\n\u062c\u0647\u0651\u0632\u062a\u064f \u0644\u0643\u0645 \u0645\u0642\u062a\u0631\u062d \u062a\u0635\u0645\u064a\u0645 \u0645\u062c\u0627\u0646\u064a \u0644\u0635\u0641\u062d\u0629 \u0647\u0628\u0648\u0637 \u0627\u062d\u062a\u0631\u0627\u0641\u064a\u0629 \u062a\u062d\u0648\u0651\u0644 \u0646\u0642\u0627\u0637 \u0642\u0648\u062a\u0643\u0645 \u0625\u0644\u0649 \u0645\u064a\u0632\u0629 \u062a\u0646\u0627\u0641\u0633\u064a\u0629 \u0645\u0631\u0626\u064a\u0629 \u0639\u0628\u0631 \u0627\u0644\u0625\u0646\u062a\u0631\u0646\u062a. \u0647\u0644 \u064a\u0645\u0643\u0646\u0646\u064a \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629\u061f \ud83d\ude4f'
       },
       fr: {
-        greeting: '\ud83d\udc4b Bonjour \u00e0 l\'\u00e9quipe de ' + name + ',\n\nJ\'ai trouv\u00e9 votre fiche Google Maps \u00e0 ' + city + '.' + (ratingLine ? ' Vous avez une note de ' + ratingLine + '.' : ''),
+        greeting: '\ud83d\udc4b Bonjour \u00e0 l\'\u00e9quipe de ' + name + ',\n\nJ\'ai trouv\u00e9 votre fiche Google Maps \u00e0 ' + city + '.' + (ratingLine ? ' Vous avez une note de ' + ratingLine + '.' : '') + (mapsLink ? '\nGoogle Maps : ' + mapsLink : ''),
         observation: hasWebsite
           ? 'J\'ai remarqu\u00e9 que votre pr\u00e9sence en ligne pourrait \u00eatre renforc\u00e9e par une landing page orient\u00e9e conversion.'
           : 'J\'ai remarqu\u00e9 que vous n\'avez pas encore de site web officiel.',
@@ -1263,7 +1264,8 @@ async function analyze(){
     rawUrl: url, name: parsed.name || '', source: '',
     prof: '', city: '', phone: '', address: '',
     rating: '', reviews: '', website: 'no', identity: 'no',
-    website_url: '', hours: '', notes: ''
+    website_url: '', hours: '', notes: '',
+    lat: parsed.lat, lng: parsed.lng
   };
 
   if(!serverKeys.serpapi) logLine('⚠ Layer 1 skipped: SERPAPI_KEY not set in proxy .env', 'warn');
@@ -1508,6 +1510,9 @@ function useProspect(btn){
   if(client.website_url && isJunkUrl(client.website_url)) client.website_url = '';
   if(!client.website_url) client.website = 'no';
 
+  if(p.gps_coordinates){ client.lat = p.gps_coordinates.latitude; client.lng = p.gps_coordinates.longitude; }
+  if(!client.rawUrl) client.rawUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent((client.name||'') + ' ' + (client.address||''));
+
   $('#f_name').value = client.name;
   $('#f_prof').value = client.prof;
   $('#f_city').value = client.city;
@@ -1595,12 +1600,18 @@ CLIENT DATA:
 ${HOURS}
 ${PROOF}
 
+LOCATION DATA (use exactly):
+- Google Maps link: ${client.rawUrl || '(none)'}
+- Coordinates: ${client.lat && client.lng ? client.lat + ',' + client.lng : '(derive from address)'}
+- Map embed src: https://maps.google.com/maps?q=${client.lat&&client.lng ? client.lat+','+client.lng : encodeURIComponent(client.address||client.name)}&z=15&output=embed
+- Directions link: https://www.google.com/maps/dir/?api=1&destination=${client.lat&&client.lng ? client.lat+','+client.lng : encodeURIComponent(client.address||client.name)}
+
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
 VISUAL TONE: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
 
-SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location + footer.
+SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location (Embed a LIVE Google Map using the embed src above (keyless iframe), and add a prominent 'Get Directions' button linking to the directions link. Do NOT use a placeholder map.) + footer.
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
 OUTPUT: single self-contained HTML/CSS/JS file.`;
 

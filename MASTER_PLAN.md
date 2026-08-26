@@ -520,6 +520,31 @@ git push origin main --tags
 
 ---
 
+# 🟣 المرحلة 9.5 — Location Data Integration in Generated Prompts
+
+## 🎯 الهدف
+دمج رابط Google Maps + الإحداثيات + خريطة embed مباشرة في جميع البرومبتات المُولّدة، بحيث تبني منصات التصميم (Claude/v0/Lovable) صفحات هبوط مع خريطة تفاعلية وزر اتجاهات.
+
+## ⏱️ الوقت: 15 دقيقة | 📈 النجاح: 100%
+
+## الميزات المُنجزة
+- ✅ حفظ `client.lat` / `client.lng` من `parseMapsUrl()` في `analyze()`
+- ✅ نسخ GPS coordinates من `p.gps_coordinates` في `useProspect()`
+- ✅ بناء `rawUrl` بديل إذا لم يكن موجودًا (من name + address)
+- ✅ LOCATION DATA block في برومبت صفحة الهبوط (Maps link + coords + embed src + directions link)
+- ✅ تعليمات迫不及حة: "Embed a LIVE Google Map + Get Directions button"
+- ✅ رسالة التواصل: رابط Google Maps القابل للنقر في EN/AR/FR
+- ✅ الحفظ/الاستعادة التلقائية عبر History
+
+## ✅ معايير النجاح
+- [ ] Paste Maps URL مع @coords → landing prompt يعرض coords + embed src + directions
+- [ ] Prospector "Use →" → نفس الشئ (من gps_coordinates)
+- [ ] عميل بدون coords → embed src يعتمد على address
+- [ ] رسالة التواصل تتضمن رابط Maps قابل للنقر
+- [ ] Download .md → LOCATION DATA موجود
+
+---
+
 # 📎 ملحق أ — الأثر المتوقع بعد إتمام P0
 
 | المقياس | قبل | بعد |
