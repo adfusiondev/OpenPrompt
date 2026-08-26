@@ -1279,7 +1279,7 @@ function openItem(id){
   $('#f_website').value=client.website||'no'; $('#f_identity').value=client.identity||'no';
   $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
   $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
-  const v=(options.variant||'conservative'); $('#o_variant').value=v; setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
+  const v=(options.variant||'conservative'); setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
   renderUSPCard();
   renderInsightsCard();
   showTab('landing', document.querySelector('.tab'));
