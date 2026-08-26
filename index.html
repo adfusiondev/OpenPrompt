@@ -1627,7 +1627,7 @@ function showTab(key, el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
   $('#promptOut').textContent=lastPrompts[key]||'';
-  $('#aiBtn').style.display = (key==='outreach' || key==='images') ? 'none' : '';
+  $('#aiBtn').style.display = key==='outreach' ? 'none' : '';
 }
 function copyCurrent(){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>toast('⧉ Copied'));
