@@ -202,6 +202,10 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <label style="color:var(--info); font-weight:600; margin:0">💬 Patient Insights:</label>
       <div id="insightsContent"></div>
     </div>
+    <div id="competitorsCard" class="hidden" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
+      <label style="color:#a78bfa; font-weight:600">⚔️ Competitor Gap Analysis</label>
+      <div id="competitorsContent" style="margin-top:10px"></div>
+    </div>
     <div class="row">
       <button class="btn" onclick="go(2)">Next: Options →</button>
       <button class="btn ghost" onclick="go(0)">← Back</button>
@@ -210,6 +214,17 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 
   <section id="s2" class="panel hidden">
     <h1>Generation Options</h1>
+    <label style="color:#fbbf24; font-weight:600">📬 Outreach Message Language</label>
+    <p class="sub" style="font-size:12px; margin-top:2px">
+      Language of the message YOU send to the client (separate from landing page language).
+      <button type="button" class="btn ghost small" style="padding:2px 8px; margin-left:8px"
+        onclick="autoDetectOutreachLang()">Auto-detect from city</button>
+    </p>
+    <select id="o_outreachLang">
+      <option value="ar">العربية (Arabic) — for MENA clients</option>
+      <option value="en">English — for international clients</option>
+      <option value="fr">Français — for francophone clients</option>
+    </select>
     <div class="grid2">
       <div><label>Landing page language</label>
         <select id="o_lang">
@@ -923,6 +938,127 @@ function renderInsightsCard(){
   card.classList.remove('hidden');
 }
 
+/* ── Outreach Language Auto-Detect ── */
+function autoDetectOutreachLang(){
+  const city = (client.city || ($('#f_city')?.value||'')).trim();
+  const frCities = /paris|lyon|marseille|casablanca|tunis|algiers|beirut|dakar|montreal|quebec|brussels|alger|oran|sfax|monastir|fez|fes|marrakech/i;
+  const arCities = /Riyadh|Jeddah|Dubai|Cairo|Amman|Doha|Kuwait|Muscat|Manama|Abu Dhabi|Sharjah|Dammam|Medina|Mecca|Alexandria|Istanbul|Ankara|Khartoum|Casablanca|Rabat|Tangier/i;
+  let lang = 'en';
+  if (frCities.test(city)) lang = 'fr';
+  else if (arCities.test(city) || /[\u0600-\u06FF]/.test(city)) lang = 'ar';
+  const sel = $('#o_outreachLang');
+  if(sel) sel.value = lang;
+  const label = {ar:'Arabic', en:'English', fr:'French'}[lang];
+  toast('📬 Outreach language detected: ' + label);
+  logLine('Outreach language auto-detected: ' + label + ' (from city: ' + city + ')', 'ok');
+}
+
+/* ── Competitor Extraction ── */
+async function extractCompetitors(c){
+  try {
+    if(!c.prof || !c.city) return;
+    logLine('⚔️ Extracting competitors...', 'info');
+    const params = new URLSearchParams({engine:'google_maps', type:'search', hl:'en', q:'"' + c.prof + ' ' + c.city + '"'});
+    const r = await apiFetch('/api/serpapi?' + params.toString(), {}, 15000);
+    if(r.offline){ logLine('⊘ Competitors: proxy offline', 'warn'); return; }
+    if(!r.ok || !r.data){ logLine('⊘ Competitors: SerpAPI error', 'warn'); return; }
+    const places = r.data.local_results?.places || r.data.local_results || [];
+    if(!Array.isArray(places) || places.length === 0){ logLine('⊘ Competitors: no results', 'warn'); return; }
+    const nameLower = (c.name||'').toLowerCase();
+    let candidates = places.filter(p => {
+      const t = (p.title||'').toLowerCase();
+      return t !== nameLower && !t.includes(nameLower) && !nameLower.includes(t);
+    });
+    candidates.sort((a,b) => ((b.rating||0)*(b.reviews||1)) - ((a.rating||0)*(a.reviews||1)));
+    candidates = candidates.slice(0, 3);
+    c.competitors = candidates.map(p => ({
+      name: p.title || p.name || '',
+      rating: p.rating || 0,
+      reviews: p.reviews || 0,
+      website: p.website || '',
+      address: p.address || '',
+      phone: p.phone || ''
+    }));
+    logLine('  ✓ Found ' + c.competitors.length + ' competitors', 'ok');
+    renderCompetitorsCard(c);
+    await generateGapAnalysis(c);
+  } catch(e){ logLine('Competitors error: ' + e.message, 'warn'); }
+}
+
+function renderCompetitorsCard(c){
+  const card = $('#competitorsCard'), box = $('#competitorsContent');
+  if(!box) return;
+  box.innerHTML = '';
+  if(!c.competitors || !c.competitors.length){ card.classList.add('hidden'); return; }
+  const mkRow = (name, rating, reviews, website, isClient) => {
+    const style = isClient ? 'border:1px solid #a78bfa; border-radius:4px; padding:6px 10px; margin-bottom:6px; background:#15131a' : 'padding:6px 10px; margin-bottom:4px; border-bottom:1px solid #222';
+    return '<div style="' + style + '"><b style="font-size:13px">' + name + (isClient ? ' (you)' : '') + '</b> <span style="font-size:12px; color:var(--muted)">' + rating + '⭐ ' + reviews + 'r — ' + (website ? '🌐 has site' : '<span style="color:var(--ok)">🎯 no site</span>') + '</span></div>';
+  };
+  box.innerHTML += mkRow(c.name, c.rating||'—', c.reviews||'0', c.website_url, true);
+  c.competitors.forEach(comp => { box.innerHTML += mkRow(comp.name, comp.rating, comp.reviews, comp.website, false); });
+  card.classList.remove('hidden');
+}
+
+async function generateGapAnalysis(c){
+  try {
+    if(!c.competitors || !c.competitors.length) return;
+    logLine('⚔️ Generating gap analysis...', 'info');
+    const compText = c.competitors.map((comp,i) => (i+1) + '. ' + comp.name + ': ' + comp.rating + '⭐, ' + comp.reviews + ' reviews, website=' + (comp.website ? 'yes':'no')).join('\n');
+    const prompt = 'You are a competitive positioning analyst. Analyze this business vs its local competitors.\n\nCLIENT:\n- Name: ' + c.name + ' (' + (c.prof||'') + ')\n- Rating: ' + (c.rating||'—') + '⭐ (' + (c.reviews||'—') + ' reviews)\n- Website: ' + (c.website_url||'none') + ' | Hours: ' + (c.hours||'—') + '\n\nCOMPETITORS:\n' + compText + '\n\nReturn ONLY valid JSON (no markdown):\n{\n  "strengths": ["2 short bullet points where client OUTPERFORMS competitors"],\n  "gaps": ["2 short bullet points where competitors OUTPERFORM client"],\n  "opportunities": ["2 actionable marketing opportunities based on gaps"]\n}\nMax 20 words per bullet. Be concrete and data-driven.';
+    const res = await callGemini({contents:[{parts:[{text:prompt}]}], generationConfig:{responseMimeType:'application/json', temperature:0.3}}, 25000);
+    if(!res.ok){ logLine('  ✗ Gap analysis failed: ' + res.error, 'warn'); return; }
+    const out = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if(!out){ logLine('  ✗ Gap analysis: empty response', 'warn'); return; }
+    let data = null;
+    try { data = JSON.parse(out); } catch(e) { const m = out.match(/\{[\s\S]*\}/); if(m) try{data=JSON.parse(m[0]);}catch(e2){} }
+    if(!data || !Array.isArray(data.strengths) || !Array.isArray(data.gaps) || !Array.isArray(data.opportunities)){
+      logLine('  ✗ Gap analysis: invalid JSON', 'warn'); return;
+    }
+    c.gapAnalysis = { strengths: data.strengths.slice(0,2), gaps: data.gaps.slice(0,2), opportunities: data.opportunities.slice(0,2) };
+    logLine('  ✓ Gap analysis ready', 'ok');
+    renderGapAnalysis(c);
+  } catch(e){ logLine('Gap analysis error: ' + e.message, 'warn'); }
+}
+
+function renderGapAnalysis(c){
+  if(!c.gapAnalysis) return;
+  const box = $('#competitorsContent');
+  if(!box) return;
+  const g = c.gapAnalysis;
+  const div = document.createElement('div');
+  div.style.cssText = 'margin-top:12px; padding-top:10px; border-top:1px solid #2b2a28';
+  div.innerHTML = '<div style="margin-top:8px"><span style="color:#4ade80; font-weight:600">✓ Strengths:</span> <span style="font-size:13px">' + (g.strengths||[]).join(' • ') + '</span></div>'
+    + '<div style="margin-top:6px"><span style="color:#fbbf24; font-weight:600">⚠ Gaps:</span> <span style="font-size:13px">' + (g.gaps||[]).join(' • ') + '</span></div>'
+    + '<div style="margin-top:6px"><span style="color:#60a5fa; font-weight:600">🎯 Opportunities:</span> <span style="font-size:13px">' + (g.opportunities||[]).join(' • ') + '</span></div>';
+  box.appendChild(div);
+}
+
+/* ── Outreach Builder (separate from page language) ── */
+function buildOutreach(c, opts){
+  const lang = opts.outreachLang || 'ar';
+  const name = c.name || 'your clinic';
+  const city = c.city || 'your city';
+  const ratingLine = c.rating ? c.rating + '⭐ (' + (c.reviews||'?') + ' reviews)' : '';
+  const webNote = c.website==='no' ? 'without a website' : 'with a web presence';
+  const hasComps = c.competitors && c.competitors.length;
+  const compBlock = hasComps
+    ? '\n\nCOMPETITIVE LANDSCAPE:\nYour top ' + c.competitors.length + ' local competitors:\n' + c.competitors.map(comp => '- ' + comp.name + ': ' + comp.rating + '⭐ (' + comp.reviews + ' reviews, ' + (comp.website ? 'has' : 'NO') + ' website)').join('\n')
+    : '';
+  const posBlock = c.gapAnalysis
+    ? '\nYOUR POSITION:\n✓ ' + (c.gapAnalysis.strengths||[])[0] + '\n⚠ ' + (c.gapAnalysis.gaps||[])[0] + '\n🎯 ' + (c.gapAnalysis.opportunities||[])[0]
+    : '';
+  let msg = '';
+  if(lang === 'en'){
+    msg = '👋 Hi team at ' + name + ',\n\nI found your listing on Google Maps in ' + city + '.' + (ratingLine ? ' You have a ' + ratingLine + ' rating.' : '') + ' I noticed ' + webNote + '.' + compBlock + posBlock + '\n\nI\'ve prepared a free landing page design proposal that turns your strengths into a visible competitive advantage online. Would you like me to send the preview? 🙏';
+  } else if(lang === 'ar'){
+    msg = '👋 مرحبًا بفريق ' + name + '\n\nصادقتُ ملفكم على خرائط Google في ' + city + '.' + (c.rating ? ' تقييمكم ' + c.rating + '⭐ من ' + (c.reviews||'—') + ' مراجعة.' : '') + ' لاحظطتُ ' + (c.website==='no' ? 'أنكم لا تملكون موقعًا رسميًا حتى الآن.' : 'أن حضوركم الرقمي يمكن تعزيزه.') + '\n\nجهّزتُ لكم مقترح تصميم أولي مجانًي لصفحة هبوط احترافية. هل يمكنني إرسال المعاينة؟ 🙏';
+  } else if(lang === 'fr'){
+    msg = '👋 Bonjour à l\'\u00e9quipe de ' + name + ',\n\nJ\'ai trouvé votre fiche Google Maps à ' + city + '.' + (ratingLine ? ' Vous avez une note de ' + ratingLine + '.' : '') + ' J\'ai remarqué que ' + (c.website==='no' ? 'vous n\'avez pas encore de site officiel.' : 'votre présence en ligne pourrait être renforcée.') + compBlock + posBlock + '\n\nJ\'ai préparé une proposition de design gratuite pour une landing page qui transforme vos atouts en avantage concurrentiel visible en ligne. Puis-je envoyer l\'aperçu ? 🙏';
+  }
+  if(c.selectedUSP) msg += '\n\n✨ ' + c.selectedUSP;
+  return msg;
+}
+
 function mergeData(existing, newData){
   if (!newData) return existing;
   const merged = {...existing};
@@ -1030,6 +1166,7 @@ async function analyze(){
   else if(!(client.prof && client.city)) logLine('⊘ Insights generation skipped: needs profession + city', 'warn');
   else if(outOfTime()) logLine('⊘ Insights generation skipped: pipeline time budget exhausted', 'warn');
   else if(await generatePatientInsights(timeLeft())) renderInsightsCard();
+  if(serverKeys.serpapi && client.name && client.prof && client.city) await extractCompetitors(client);
 
   $('#f_name').value = client.name || '';
   $('#f_prof').value = client.prof || '';
@@ -1258,7 +1395,7 @@ function collect(){
   client.address=$('#f_address').value.trim(); client.notes=$('#f_notes').value.trim();
   client.website=$('#f_website').value; client.identity=$('#f_identity').value;
   client.website_url=$('#f_website_url').value.trim(); client.hours=$('#f_hours').value.trim();
-  options={lang:$('#o_lang').value, cta:$('#o_cta').value, tone:$('#o_tone').value, variant:options.variant||'conservative'};
+  options={lang:$('#o_lang').value, cta:$('#o_cta').value, tone:$('#o_tone').value, variant:options.variant||'conservative', outreachLang:$('#o_outreachLang')?.value||'en'};
 }
 function buildPrompts(){
   const LANG_FULL = {
@@ -1322,24 +1459,7 @@ OUTPUT: single self-contained HTML/CSS/JS file.`;
 
 DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, patient folder, social post), usage guidelines.`;
 
-  const clinicName = client.name || 'your clinic';
-  const city = client.city || 'your city';
-  const ratingLine = client.rating ? `I noticed you have a ${client.rating} ⭐ rating with ${client.reviews||'—'} reviews. ` : '';
-  const webIssue = client.website==='no' ? "you don't currently have an official website" : "your web presence could be stronger";
-
-  let outreach = '';
-  if(options.lang === 'en'){
-    outreach = `👋 Hi team at ${clinicName},\n\nI found your listing on Google Maps in ${city}. ${ratingLine}I noticed ${webIssue}.\n\nI've put together a free design proposal for a professional landing page. Would you like me to send the preview? 🙏`;
-  } else if(options.lang === 'ar'){
-    outreach = `👋 مرحبًا بفريق ${clinicName}\n\nصادفتُ ملفكم على خرائط Google في ${city}. ${client.rating?`تقييمكم ${client.rating} ⭐ من ${client.reviews||'—'} مراجعة — دليل قوي على ثقة المرضى بكم. `:''}${client.website==='no' ? 'لاحظتُ أنكم لا تملكون موقعًا رسميًا حتى الآن.' : 'يمكن تعزيز حضوركم الرقمي أكثر.'}\n\nجهّزتُ لكم مقترح تصميم أولي مجاني لصفحة هبوط احترافية. هل يمكنني إرسال المعاينة؟ 🙏`;
-  } else if(options.lang === 'fr'){
-    outreach = `👋 Bonjour à l'équipe de ${clinicName},\n\nJ'ai trouvé votre fiche Google Maps à ${city}. ${ratingLine}J'ai remarqué que ${client.website==='no' ? "vous n'avez pas encore de site officiel." : "votre présence en ligne pourrait être renforcée."}\n\nJ'ai préparé une proposition de design gratuite. Puis-je envoyer l'aperçu ? 🙏`;
-  } else if(options.lang === 'fr_ar'){
-    outreach = `👋 Bonjour à l'équipe de ${clinicName},\n\nJ'ai trouvé votre fiche Google Maps à ${city}. ${ratingLine}J'ai remarqué que ${client.website==='no' ? "vous n'avez pas encore de site officiel." : "votre présence en ligne pourrait être renforcée."}\n\nJ'ai préparé une proposition de design gratuite en bilingue (FR + AR). Puis-je envoyer l'aperçu ? 🙏`;
-  } else if(options.lang === 'fr_ar_en'){
-    outreach = `👋 Bonjour à l'équipe de ${clinicName},\n\nJ'ai trouvé votre fiche Google Maps à ${city}. ${ratingLine}J'ai remarqué que ${client.website==='no' ? "vous n'avez pas encore de site officiel." : "votre présence en ligne pourrait être renforcée."}\n\nJ'ai préparé une proposition de design gratuite en trilingue (FR + AR + EN). Puis-je envoyer l'aperçu ? 🙏`;
-  }
-  if(client.selectedUSP) outreach += '\n\n✨ ' + client.selectedUSP;
+  const outreach = buildOutreach(client, options);
   return {landing, identity, outreach};
 }
 function generate(){
@@ -1457,6 +1577,7 @@ function openItem(id){
   $('#f_website').value=client.website||'no'; $('#f_identity').value=client.identity||'no';
   $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
   $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
+  $('#o_outreachLang').value=options.outreachLang||'en';
   const v=(options.variant||'conservative'); setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
   renderUSPCard();
   renderInsightsCard();
