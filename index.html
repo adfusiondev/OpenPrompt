@@ -160,6 +160,10 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <label>Full address</label><input id="f_address">
     <label>Notes / strengths (optional)</label>
     <textarea id="f_notes" rows="2" placeholder="e.g. 15 years of experience, modern laser equipment..."></textarea>
+    <div id="uspCard" class="hidden" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
+      <label style="color:var(--ok); font-weight:600; margin:0">🎯 Select a USP:</label>
+      <div id="uspOptions"></div>
+    </div>
     <div class="row">
       <button class="btn" onclick="go(2)">Next: Options →</button>
       <button class="btn ghost" onclick="go(0)">← Back</button>
@@ -701,6 +705,55 @@ function normalizeGeminiKeys(d){
   return d;
 }
 
+async function generateUSP(timeoutMs){
+  try {
+    logLine('🎯 Generating USP options...', 'info');
+    const prompt = `Generate 3 distinct Unique Selling Proposition (USP) options.
+Business: ${client.name}, ${client.prof}, ${client.city}
+Rating: ${client.rating || '—'} stars (${client.reviews || '—'} reviews)
+Website: ${client.website_url || 'none'} | Hours: ${client.hours || '—'}
+Each USP = one compelling sentence, max 15 words.
+Return ONLY valid JSON (no markdown, no explanation): {"usps": ["...", "...", "..."]}`;
+    const res = await callGemini({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{ responseMimeType:'application/json', temperature: 0.7 }
+    }, timeoutMs || 25000);
+    if (!res.ok) { logLine('  ✗ USP generation failed: ' + res.error, 'warn'); return false; }
+    const out = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!out) { logLine('  ✗ USP: empty response', 'warn'); return false; }
+    let data = null;
+    try { data = JSON.parse(out); } catch(e) {
+      const m = out.match(/\{[\s\S]*\}/);
+      if (m) { try { data = JSON.parse(m[0]); } catch(e2) {} }
+    }
+    if (!data || !Array.isArray(data.usps)) { logLine('  ✗ USP: invalid JSON shape', 'warn'); return false; }
+    client.usps = data.usps.map(u => String(u || '').trim()).filter(Boolean).slice(0, 3);
+    if (!client.usps.length) { logLine('  ✗ USP: no usable options returned', 'warn'); return false; }
+    logLine('  ✓ ' + client.usps.length + ' USP options ready', 'ok');
+    return true;
+  } catch(e) { logLine('USP error: ' + e.message, 'warn'); return false; }
+}
+
+function renderUSPCard(){
+  const card = $('#uspCard'), box = $('#uspOptions');
+  box.innerHTML = '';
+  if (!client.usps || !client.usps.length) { card.classList.add('hidden'); return; }
+  client.usps.forEach((u, i) => {
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex; gap:10px; align-items:flex-start; margin-top:10px; cursor:pointer; font-size:13px; line-height:1.5; color:var(--text)';
+    const radio = document.createElement('input');
+    radio.type = 'radio'; radio.name = 'uspRadio';
+    radio.style.cssText = 'width:auto; margin-top:3px';
+    radio.checked = client.selectedUSP === u;
+    radio.onchange = () => { client.selectedUSP = u; };
+    const span = document.createElement('span');
+    span.textContent = u;
+    label.appendChild(radio); label.appendChild(span);
+    box.appendChild(label);
+  });
+  card.classList.remove('hidden');
+}
+
 function mergeData(existing, newData){
   if (!newData) return existing;
   const merged = {...existing};
@@ -723,6 +776,7 @@ async function analyze(){
   clearLog();
   $('#preview').classList.add('hidden');
   $('#nextRow').classList.add('hidden');
+  $('#uspCard').classList.add('hidden');
   const st = $('#analyzeStatus');
   st.textContent = ''; st.className = 'status';
 
@@ -791,6 +845,11 @@ async function analyze(){
     const pid = detectProfessionId((client.name||'') + ' ' + url);
     if(pid){ client.prof = CAT_LABEL[pid]; logLine('🏷 Profession detected: ' + client.prof, 'ok'); }
   }
+
+  if(!serverKeys.gemini) logLine('⊘ USP generation skipped: GEMINI_API_KEY not set in proxy .env', 'warn');
+  else if(!(client.name && client.prof && client.city)) logLine('⊘ USP generation skipped: needs name + profession + city', 'warn');
+  else if(outOfTime()) logLine('⊘ USP generation skipped: pipeline time budget exhausted', 'warn');
+  else if(await generateUSP(timeLeft())) renderUSPCard();
 
   $('#f_name').value = client.name || '';
   $('#f_prof').value = client.prof || '';
@@ -879,6 +938,7 @@ function buildPrompts(){
   const PROOF = client.rating ? `- Real Google rating: ${client.rating} ⭐ (${client.reviews||'?'} reviews).` : '';
   const HOURS = client.hours ? `- Working hours: ${client.hours}` : '';
   const NOTES = client.notes ? `Additional: ${client.notes}` : '';
+  const USP = client.selectedUSP ? `PRIMARY USP TO EMPHASIZE: ${client.selectedUSP}` : '';
 
   const landing=`You are a senior web designer specializing in medical landing pages. Build a complete page:
 
@@ -895,13 +955,13 @@ ${PROOF}
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
-VISUAL TONE: ${TONE}.
+VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}
 
 SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location + footer.
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
 OUTPUT: single self-contained HTML/CSS/JS file.`;
 
-  const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.
+  const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${USP ? '\n' + USP : ''}
 
 DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, patient folder, social post), usage guidelines.`;
 
@@ -922,6 +982,7 @@ DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typ
   } else if(options.lang === 'fr_ar_en'){
     outreach = `👋 Bonjour à l'équipe de ${clinicName},\n\nJ'ai trouvé votre fiche Google Maps à ${city}. ${ratingLine}J'ai remarqué que ${client.website==='no' ? "vous n'avez pas encore de site officiel." : "votre présence en ligne pourrait être renforcée."}\n\nJ'ai préparé une proposition de design gratuite en trilingue (FR + AR + EN). Puis-je envoyer l'aperçu ? 🙏`;
   }
+  if(client.selectedUSP) outreach += '\n\n✨ ' + client.selectedUSP;
   return {landing, identity, outreach};
 }
 function generate(){
@@ -1039,7 +1100,9 @@ function openItem(id){
   $('#f_website').value=client.website||'no'; $('#f_identity').value=client.identity||'no';
   $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
   $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
+  renderUSPCard();
   showTab('landing', document.querySelector('.tab'));
+
   go(3);
 }
 function delItem(id){
