@@ -1,6 +1,6 @@
 # PROJECT_STATUS — OpenPrompt
 
-## Current Version: `v2.0.0-p0`
+## Current Version: `v2.0.1-p0`
 
 ## Active Branch: `main`
 

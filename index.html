@@ -329,7 +329,9 @@ async function callGemini(body, timeoutMs){
       if (r.status === 503 && r.data && r.data.code === 'NO_KEY') return { ok:false, error:String(r.data.error||'GEMINI_API_KEY missing on proxy') };
       const t = typeof r.data==='string' ? r.data : JSON.stringify(r.data||{});
       lastErr = `${model}: HTTP ${r.status} — ${t.slice(0,120)}`;
-      if (r.status === 404 || /not found|not available|unsupported|deprecated/i.test(t)) continue;
+      if (r.status === 404 || r.status === 429 ||
+          (r.status === 503 && /high demand|overload|resource exhausted|temporarily unavailable/i.test(t)) ||
+          /not found|not available|unsupported|deprecated/i.test(t)) continue;
       break;
     } catch(e) { lastErr = `${model}: ${e.message}`; break; }
   }
@@ -450,11 +452,40 @@ async function resolveShortUrl(url, budgetMs = 15000){
         return found;
       }
       logLine('  Proxy returned a non-Maps URL \u2014 trying fallbacks', 'warn');
+    } else if (pr.status === 429 && left() > 5000) {
+      logLine('  Proxy resolver: rate-limited (429) \u2014 retrying in 2s...', 'warn');
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const pr2 = await apiFetch('/api/unshorten?url=' + encodeURIComponent(url), {}, Math.min(8000, left()));
+        if (pr2.ok && pr2.data && pr2.data.ok && pr2.data.url) {
+          const found = findMapsUrl(pr2.data.url);
+          if (found) {
+            logLine('\u2713 Resolved via proxy (retry) \u2192 ' + found.slice(0,80) + '...', 'ok');
+            return found;
+          }
+        }
+      } catch(e2) {}
     } else {
       const em = pr.data && pr.data.error ? pr.data.error : ('HTTP ' + pr.status);
       logLine('  Proxy resolver: ' + em + ' \u2014 trying fallbacks', 'warn');
     }
   } catch(e) {}
+  if (left() > 4000) {
+    try {
+      const jr = await apiFetch('/api/jina', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ targetUrl: url })
+      }, Math.min(10000, left()));
+      if (jr.ok) {
+        const text = typeof jr.data === 'string' ? jr.data : '';
+        const found = findMapsUrl(text.slice(0, 10000));
+        if (found) {
+          logLine('\u2713 Resolved via proxy Jina \u2192 ' + found.slice(0,80) + '...', 'ok');
+          return found;
+        }
+      }
+    } catch(e) {}
+  }
   try {
     const r = await fetch('https://r.jina.ai/' + url, {
       headers: jinaHeaders(),
@@ -467,6 +498,7 @@ async function resolveShortUrl(url, budgetMs = 15000){
         logLine('\u2713 Resolved via Jina \u2192 ' + found.slice(0,80) + '...', 'ok');
         return found;
       }
+      logLine('  Jina returned content but no Maps URL found', 'warn');
     } else {
       logLine('  Jina resolver HTTP ' + r.status + ' \u2014 trying fallback proxies', 'warn');
     }
@@ -482,16 +514,18 @@ async function resolveShortUrl(url, budgetMs = 15000){
     if (left() < 3000) break;
     try {
       const r2 = await fetch(px(url), { signal: AbortSignal.timeout(Math.min(8000, left())) });
-      if (!r2.ok) continue;
+      if (!r2.ok) { logLine('  Fallback proxy HTTP ' + r2.status + ' \u2014 trying next', 'warn'); continue; }
       const body = await r2.text();
       const found = findMapsUrl(body.slice(0, 40000));
       if (found) {
         logLine('\u2713 Resolved via fallback proxy \u2192 ' + found.slice(0,80) + '...', 'ok');
         return found;
       }
-    } catch(e) {}
+    } catch(e) {
+      logLine('  Fallback proxy failed: ' + e.message, 'warn');
+    }
   }
-  logLine('\u26a0 Could not resolve short URL \u2014 continuing with the original link', 'warn');
+  logLine('\u26a0 Could not resolve short URL. Tip: open the link in a new tab, copy the full Google Maps URL, and paste it directly.', 'warn');
   return url;
 }
 
@@ -923,9 +957,10 @@ async function analyze(){
   else if(!(client.name && client.prof && client.city)) logLine('⊘ USP generation skipped: needs name + profession + city', 'warn');
   else if(outOfTime()) logLine('⊘ USP generation skipped: pipeline time budget exhausted', 'warn');
   else if(await generateUSP(timeLeft())) renderUSPCard();
-  if(serverKeys.gemini && !outOfTime()) {
-    if(await generatePatientInsights(timeLeft())) renderInsightsCard();
-  }
+  if(!serverKeys.gemini) logLine('⊘ Insights generation skipped: GEMINI_API_KEY not set in proxy .env', 'warn');
+  else if(!(client.prof && client.city)) logLine('⊘ Insights generation skipped: needs profession + city', 'warn');
+  else if(outOfTime()) logLine('⊘ Insights generation skipped: pipeline time budget exhausted', 'warn');
+  else if(await generatePatientInsights(timeLeft())) renderInsightsCard();
 
   $('#f_name').value = client.name || '';
   $('#f_prof').value = client.prof || '';
