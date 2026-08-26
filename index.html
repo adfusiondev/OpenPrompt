@@ -215,6 +215,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     </div>
     <div class="row">
       <button class="btn" onclick="go(2)">Next: Options →</button>
+      <button class="btn ghost" onclick="addLead()">📊 Add to Leads Sheet</button>
       <button class="btn ghost" onclick="go(0)">← Back</button>
     </div>
   </section>
@@ -296,6 +297,12 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 
   <section id="s4" class="panel hidden">
     <h1>Client History</h1>
+    <div class="row" style="margin-top:0;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+      <div id="leadsToolbar" style="flex:1;min-width:120px"></div>
+      <button class="btn ghost small" onclick="downloadLeadsCSV()">⬇ Download leads.csv</button>
+      <button class="btn ghost small" onclick="copyLeadsTSV()">⧉ Copy for Google Sheets</button>
+      <button class="btn ghost small" onclick="clearLeads()">🗑 Clear leads</button>
+    </div>
     <div class="row" style="margin-top:0;margin-bottom:18px">
       <input id="histSearch" class="mono" placeholder="🔍 Filter by name or city..." oninput="renderHistory()" style="flex:1;min-width:180px">
       <button class="btn ghost small" onclick="exportAll()">↓ Export all as JSON</button>
@@ -343,7 +350,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 
 <script>
 const $=s=>document.querySelector(s);
-const LS_H='op_history_v1', LS_S='op_settings_v1';
+const LS_H='op_history_v1', LS_S='op_settings_v1', LS_L='op_leads_v1';
 (function migrateLegacyKeys(){
   try {
     [['pc_history_v1', LS_H], ['pc_settings_v5', LS_S]].forEach(([o,n]) => {
@@ -442,7 +449,7 @@ function go(n){
   $('#stepper').innerHTML = STEPS.map((s,i)=>
     `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
   if(n===0) switchMode('extract');
-  if(n===4) renderHistory();
+  if(n===4){ renderLeads(); renderHistory(); }
   window.scrollTo(0,0);
 }
 
@@ -1808,6 +1815,43 @@ function clearAllKeys(){
 
 function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'),2200); }
+
+function getLeads(){ try { return JSON.parse(localStorage.getItem(LS_L)||'[]'); } catch(e){ return []; } }
+function addLead(){
+  const row={name:client.name||'', prof:client.prof||'', city:client.city||'', phone:client.phone||'', rating:client.rating||'', website:client.website_url||'', ts:new Date().toISOString().replace('T',' ').slice(0,16)};
+  const leads=getLeads();
+  if(leads.some(l=>l.name===row.name && l.city===row.city)){ toast('Already in leads'); return; }
+  leads.unshift(row);
+  try { localStorage.setItem(LS_L, JSON.stringify(leads)); }
+  catch(e){ toast('Storage full — export your data and clean History'); return; }
+  toast('Added to leads ('+leads.length+' total)');
+}
+function renderLeads(){
+  const leads=getLeads();
+  const el=$('#leadsToolbar');
+  if(!el) return;
+  el.innerHTML = '<span style="color:var(--muted);font-size:13px">Leads: <b>'+leads.length+'</b></span>';
+}
+function csvEscape(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }
+function downloadLeadsCSV(){
+  const leads=getLeads();
+  if(!leads.length){ toast('No leads yet'); return; }
+  const header=['Name','Profession','City','Phone','Rating','Website'];
+  const rows=leads.map(r=>[r.name,r.prof,r.city,r.phone,r.rating,r.website].map(csvEscape).join(','));
+  dl('leads.csv','\uFEFF'+header.join(',')+'\n'+rows.join('\n'));
+  toast('leads.csv downloaded');
+}
+function copyLeadsTSV(){
+  const leads=getLeads();
+  if(!leads.length){ toast('No leads yet'); return; }
+  const header=['Name','Profession','City','Phone','Rating','Website'];
+  const rows=leads.map(r=>[r.name,r.prof,r.city,r.phone,r.rating,r.website].join('\t'));
+  navigator.clipboard.writeText(header.join('\t')+'\n'+rows.join('\n')).then(()=>toast('Copied for Google Sheets'));
+}
+function clearLeads(){
+  if(!confirm('Clear all leads?')) return;
+  localStorage.removeItem(LS_L); renderLeads(); toast('Leads cleared');
+}
 
 go(0);
 </script>
