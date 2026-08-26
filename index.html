@@ -208,6 +208,11 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <pre class="prompt" id="promptOut"></pre>
     <div class="row">
       <button class="btn" onclick="copyCurrent()">⧉ Copy</button>
+      <button class="btn ghost" onclick="openInTool('Claude', 'https://claude.ai/new')">↗ Claude</button>
+      <button class="btn ghost" onclick="openInTool('ChatGPT', 'https://chatgpt.com')">↗ ChatGPT</button>
+      <button class="btn ghost" onclick="openInTool('v0', 'https://v0.dev')">↗ v0</button>
+      <button class="btn ghost" onclick="openInTool('Lovable', 'https://lovable.dev')">↗ Lovable</button>
+      <button class="btn ghost" onclick="openInTool('Bolt', 'https://bolt.new')">↗ Bolt</button>
       <button class="btn ghost" id="claudeBtn" onclick="copyForClaude()">🤖 Copy for Claude</button>
       <button class="btn ghost" id="studioBtn" onclick="openInAIStudio()">🎓 Open in AI Studio</button>
       <button class="btn ghost" onclick="downloadCurrent()">↓ Export full client report</button>
@@ -949,6 +954,12 @@ function openInAIStudio(){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'');
   toast('⧉ Copied — paste in AI Studio');
   window.open('https://aistudio.google.com','_blank');
+}
+function openInTool(toolName, url){
+  navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>{
+    toast('⧉ Copied! Opening ' + toolName + '...');
+    setTimeout(()=>window.open(url,'_blank'), 300);
+  });
 }
 function downloadCurrent(){
   const rows = [
