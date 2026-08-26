@@ -116,6 +116,12 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 .toggle input:checked + .slider{background:#2d3a20}
 .toggle input:checked + .slider::after{left:20px; background:var(--ok)}
 .toggle span{color:var(--muted); font-size:13px}
+
+.seg{display:flex; gap:0; margin-top:8px; border:1px solid var(--border); border-radius:6px; overflow:hidden; width:fit-content}
+.seg button{background:transparent; border:none; color:var(--muted); padding:8px 16px; cursor:pointer; font-size:13px; font-family:Inter,sans-serif; transition:all .15s}
+.seg button:not(:last-child){border-right:1px solid var(--border)}
+.seg button.active{background:var(--light); color:var(--dark); font-weight:600}
+.seg button:hover:not(.active){color:var(--text)}
 </style>
 </head>
 <body>
@@ -206,6 +212,13 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
           <option value="friendly">Friendly & approachable</option>
           <option value="modern">Modern & tech-forward</option>
         </select></div>
+
+      <div><label>Design variant</label>
+        <div class="seg" id="variantSeg">
+          <button class="active" onclick="setVariant('conservative',this)">🛡 Conservative</button>
+          <button onclick="setVariant('bold',this)">⚡ Bold</button>
+          <button onclick="setVariant('premium',this)">💎 Premium</button>
+        </div></div>
     </div>
     <div class="row">
       <button class="btn" onclick="generate()"> Generate prompts</button>
@@ -1049,6 +1062,17 @@ async function testBackend(){
   }
 }
 
+const VARIANT_DIRECTIVES = {
+  conservative: 'DESIGN VARIANT: Conservative — prioritize trust, high credibility, and institutional reliability. Use a classic, clean layout with ample whitespace. Favor subtle color gradients, professional photography style, traditional navigation patterns. Copywriting should be measured, authoritative, and fact-based. Emphasize certifications, years of experience, patient testimonials, and clinical precision. Avoid flashy animations or aggressive CTAs.',
+  bold: 'DESIGN VARIANT: Bold — maximize conversion with punchy hooks and high-contrast visual cues. Use large hero sections, vibrant accent colors, dynamic hover effects, and urgency-driven layout. Copywriting should be direct, action-oriented, and benefit-focused. Lead with results, use strong verbs, create FOMO with limited-time offers. CTA buttons should be prominent and repeated strategically.',
+  premium: 'DESIGN VARIANT: Premium — luxury boutique feel with minimalist elegance and exclusivity. Use restrained color palette (black/white/gold accents), generous whitespace, elegant serif or thin sans-serif typography. Copywriting should be refined, understated, and aspirational. Emphasize bespoke experience, privacy, white-glove service. Layout should feel curated, not crowded — every element earns its space.'
+};
+function setVariant(v, btn){
+  options.variant = v;
+  document.querySelectorAll('#variantSeg button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
 function collect(){
   client.name=$('#f_name').value.trim(); client.prof=$('#f_prof').value.trim();
   client.city=$('#f_city').value.trim(); client.phone=$('#f_phone').value.trim();
@@ -1056,7 +1080,7 @@ function collect(){
   client.address=$('#f_address').value.trim(); client.notes=$('#f_notes').value.trim();
   client.website=$('#f_website').value; client.identity=$('#f_identity').value;
   client.website_url=$('#f_website_url').value.trim(); client.hours=$('#f_hours').value.trim();
-  options={lang:$('#o_lang').value, cta:$('#o_cta').value, tone:$('#o_tone').value};
+  options={lang:$('#o_lang').value, cta:$('#o_cta').value, tone:$('#o_tone').value, variant:options.variant||'conservative'};
 }
 function buildPrompts(){
   const LANG_FULL = {
@@ -1110,13 +1134,13 @@ ${PROOF}
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
-VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
+VISUAL TONE: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
 
 SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location + footer.
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
 OUTPUT: single self-contained HTML/CSS/JS file.`;
 
-  const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${USP ? '\n' + USP : ''}
+  const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}
 
 DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, patient folder, social post), usage guidelines.`;
 
@@ -1255,6 +1279,7 @@ function openItem(id){
   $('#f_website').value=client.website||'no'; $('#f_identity').value=client.identity||'no';
   $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
   $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
+  const v=(options.variant||'conservative'); $('#o_variant').value=v; setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
   renderUSPCard();
   renderInsightsCard();
   showTab('landing', document.querySelector('.tab'));
