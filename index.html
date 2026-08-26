@@ -303,6 +303,11 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn ghost small" onclick="downloadLeadsCSV()">⬇ Download leads.csv</button>
       <button class="btn ghost small" onclick="copyLeadsTSV()">⧉ Copy for Google Sheets</button>
       <button class="btn ghost small" onclick="clearLeads()">🗑 Clear leads</button>
+      <label class="toggle" style="font-size:12px;margin:0;margin-inline-start:8px">
+        <input type="checkbox" id="autoLeadsToggle" onchange="localStorage.setItem('op_auto_leads',this.checked)">
+        <span class="slider"></span>
+        <span>Auto-add</span>
+      </label>
     </div>
     <div class="row" style="margin-top:0;margin-bottom:18px">
       <input id="histSearch" class="mono" placeholder="🔍 Filter by name or city..." oninput="renderHistory()" style="flex:1;min-width:180px">
@@ -450,7 +455,7 @@ function go(n){
   $('#stepper').innerHTML = STEPS.map((s,i)=>
     `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
   if(n===0) switchMode('extract');
-  if(n===4){ renderLeads(); renderHistory(); }
+  if(n===4){ const at=$('#autoLeadsToggle'); if(at) at.checked=localStorage.getItem('op_auto_leads')==='true'; renderLeads(); renderHistory(); }
   window.scrollTo(0,0);
 }
 
@@ -1731,6 +1736,7 @@ function saveOrUpdate(){
   }
   try { localStorage.setItem(LS_H, JSON.stringify(h)); }
   catch(e){ toast('Storage full — export your data and clean History'); }
+  if(localStorage.getItem('op_auto_leads')==='true') addLeadFromClient(client);
 }
 function renderHistory(){
   const q=($('#histSearch')?.value||'').trim().toLowerCase();
@@ -1739,9 +1745,12 @@ function renderHistory(){
     <div class="hist-item">
       <div class="info"><b>${x.client.name}</b>
         <span>${x.client.prof} • ${x.client.city} • ${x.ts}${x.client.source==='prospected'?' • <span style="color:var(--ok)">🎯 Prospected</span>':''}</span></div>
-      <div class="row" style="margin:0">
+      <div class="row" style="margin:0;flex-wrap:wrap;gap:4px">
         <button class="btn small" onclick="openItem(${x.id})">Open</button>
-        <button class="btn ghost small" onclick="delItem(${x.id})">Delete</button>
+        ${x.client.phone ? `<button class="btn ghost small" onclick="openWhatsApp('${(x.client.phone||'').replace(/'/g,"\\'")}','${(x.prompts?.outreach||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n')}')" title="Send via WhatsApp">📲</button>` : ''}
+        <button class="btn ghost small" onclick="addLeadFromClient(${JSON.stringify(x.client).replace(/"/g,'&quot;')})" title="Add to leads">📊</button>
+        ${x.prompts?.outreach ? `<button class="btn ghost small" onclick="navigator.clipboard.writeText(\`${x.prompts.outreach.replace(/`/g,'\\`').replace(/\$/g,'\\$')}\`).then(()=>toast('📋 Outreach copied'))" title="Copy outreach">⧉</button>` : ''}
+        <button class="btn ghost small" onclick="delItem(${x.id})">🗑</button>
       </div>
     </div>`).join('')
     : `<p class="sub">${q ? 'No clients match your search.' : 'No saved clients yet.'}</p>`;
@@ -1819,15 +1828,7 @@ function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('sho
   setTimeout(()=>el.classList.remove('show'),2200); }
 
 function getLeads(){ try { return JSON.parse(localStorage.getItem(LS_L)||'[]'); } catch(e){ return []; } }
-function addLead(){
-  const row={name:client.name||'', prof:client.prof||'', city:client.city||'', phone:client.phone||'', rating:client.rating||'', website:client.website_url||'', ts:new Date().toISOString().replace('T',' ').slice(0,16)};
-  const leads=getLeads();
-  if(leads.some(l=>l.name===row.name && l.city===row.city)){ toast('Already in leads'); return; }
-  leads.unshift(row);
-  try { localStorage.setItem(LS_L, JSON.stringify(leads)); }
-  catch(e){ toast('Storage full — export your data and clean History'); return; }
-  toast('Added to leads ('+leads.length+' total)');
-}
+function addLead(){ addLeadFromClient(client); }
 function renderLeads(){
   const leads=getLeads();
   const el=$('#leadsToolbar');
@@ -1855,17 +1856,19 @@ function clearLeads(){
   localStorage.removeItem(LS_L); renderLeads(); toast('Leads cleared');
 }
 
-function normalizePhone(phone){
-  let d=phone.replace(/\D/g,'');
-  if(d.startsWith('00')) d=d.slice(2);
-  if(d.startsWith('0')){ toast('Add country code to the phone first (e.g. +966...)'); return null; }
-  if(d.length<8){ toast('Phone looks incomplete'); return null; }
-  return d;
+function addLeadFromClient(c){
+  const row={name:c.name||'', prof:c.prof||'', city:c.city||'', phone:c.phone||'', rating:c.rating||'', website:c.website_url||'', ts:new Date().toISOString().replace('T',' ').slice(0,16)};
+  const leads=getLeads();
+  if(leads.some(l=>l.name===row.name && l.city===row.city)){ toast('Already in leads'); return; }
+  leads.unshift(row);
+  try { localStorage.setItem(LS_L, JSON.stringify(leads)); }
+  catch(e){ toast('Storage full — export your data and clean History'); return; }
+  toast('Added to leads ('+leads.length+' total)');
 }
-function sendWhatsApp(){
-  const digits=normalizePhone(client.phone||'');
+function openWhatsApp(phone, message){
+  const digits=normalizePhone(phone||'');
   if(!digits) return;
-  const msg=lastPrompts.outreach||'';
+  const msg=message||'';
   const url='https://wa.me/'+digits+'?text='+encodeURIComponent(msg);
   navigator.clipboard.writeText(msg).catch(()=>{});
   window.open(url,'_blank');
@@ -1874,6 +1877,14 @@ function sendWhatsApp(){
   const cl=(client.city||'').match(/\u0627\u0644\u0631\u064a\u0627\u0636|\u062f\u0628\u064a|\u0627\u0644\u0645\u0646\u0627\u0645\u0629|\u0627\u0644\u0643\u0648\u064a\u062a|\u0627\u0644\u0623\u0631\u062f\u0646/);
   if(cl && ol!=='ar') toast('Tip: message is in '+ol.toUpperCase()+' — switch outreach language if needed');
 }
+function normalizePhone(phone){
+  let d=phone.replace(/\D/g,'');
+  if(d.startsWith('00')) d=d.slice(2);
+  if(d.startsWith('0')){ toast('Add country code to the phone first (e.g. +966...)'); return null; }
+  if(d.length<8){ toast('Phone looks incomplete'); return null; }
+  return d;
+}
+function sendWhatsApp(){ openWhatsApp(client.phone, lastPrompts.outreach); }
 
 go(0);
 </script>

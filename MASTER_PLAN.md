@@ -545,6 +545,30 @@ git push origin main --tags
 
 ---
 
+# 🟣 المرحلة 12.5 — History-Centric Outreach Actions
+
+## 🎯 الهدف
+تحوّل كل صف في History إلى وحدة إجراء كاملة: WhatsApp + Leads + نسخ الرسالة.
+
+## ⏱️ الوقت: 15 دقيقة | 📈 النجاح: 100%
+
+## الميزات المُنجزة
+- ✅ `addLeadFromClient(c)` — مشاركة بين s1 وزHistory
+- ✅ `openWhatsApp(phone, message)` — مشاركة بين s3 وزHistory
+- ✅ أزرار الصف: 📲 WhatsApp | 📊 +Leads | ⧉ Outreach | 🗑 Delete
+- ✅ WhatsApp مخفى إذا لا هاتف؛ toast إذا لا رسالة
+- ✅ تبديل "Auto-add" في شريط History (localStorage 'op_auto_leads')
+- ✅ `saveOrUpdate()` يستدعي `addLeadFromClient` عند التبديل ON
+
+## ✅ معايير النجاح
+- [ ] عميل قديم بلا هاتف → WhatsApp مخفى
+- [ ] عميل مع رسائل → 📲 يفتح wa.me مع رسالة مسبقة
+- [ ] +Leads من صف → dedupe toast + عداد يتحدث
+- [ ] Auto-add ON → حفظ جديد يظهر في Leads تلقائيًا
+- [ ] أزرار s1/s3 الأصلية لا تزال تعمل
+
+---
+
 # 📎 ملحق أ — الأثر المتوقع بعد إتمام P0
 
 | المقياس | قبل | بعد |

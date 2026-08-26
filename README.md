@@ -145,6 +145,7 @@
 - **تأثيرات التصميم**: Bold → high contrast، Premium → luxury accents
 - متوافق مع Midjourney / Flux / DALL-E
 - يُحفظ في History ويُستعاد تلقائيًا
+- **Per-row outreach actions**: 📲 WhatsApp | 📊 +Leads | ⧉ Outreach (from History)
 
 ### 📍 Location Integration (جديد)
 دمج بيانات الموقع في جميع البرومبتات المُولّدة:
