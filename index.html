@@ -164,6 +164,10 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <label style="color:var(--ok); font-weight:600; margin:0">🎯 Select a USP:</label>
       <div id="uspOptions"></div>
     </div>
+    <div id="insightsCard" class="hidden" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
+      <label style="color:var(--info); font-weight:600; margin:0">💬 Patient Insights:</label>
+      <div id="insightsContent"></div>
+    </div>
     <div class="row">
       <button class="btn" onclick="go(2)">Next: Options →</button>
       <button class="btn ghost" onclick="go(0)">← Back</button>
@@ -754,6 +758,74 @@ function renderUSPCard(){
   card.classList.remove('hidden');
 }
 
+async function generatePatientInsights(timeoutMs){
+  try {
+    logLine('💬 Generating patient insights...', 'info');
+    const catId = detectProfessionId((client.prof || '') + ' ' + (client.name || ''));
+    const services = SERVICES_HINT[catId] || '';
+    const audience = (catId === 'restaurant' || catId === 'legal') ? 'customers' : 'patients';
+    const owner = audience === 'patients' ? 'patient' : 'customer';
+    const prompt = `You are a ${owner} sentiment analyst. For a ${client.prof || 'business'} in ${client.city || 'an unknown city'} with ${client.rating || '—'} stars from ${client.reviews || '—'} reviews, generate realistic insights about ${audience}.
+${catId ? 'Business category: ' + CAT_LABEL[catId] : ''}${services ? '\nTypical services: ' + services : ''}
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "strengths": ["3 likely ${audience} compliments with short quotes"],
+  "concerns": ["3 likely ${audience} pain points"],
+  "keywords": ["5-8 phrases ${audience} use when searching"]
+}
+Be realistic and profession-specific.`;
+    const res = await callGemini({
+      contents:[{parts:[{text:prompt}]}],
+      generationConfig:{ responseMimeType:'application/json', temperature: 0.7 }
+    }, timeoutMs || 25000);
+    if (!res.ok) { logLine('  ✗ Insights generation failed: ' + res.error, 'warn'); return false; }
+    const out = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!out) { logLine('  ✗ Insights: empty response', 'warn'); return false; }
+    let data = null;
+    try { data = JSON.parse(out); } catch(e) {
+      const m = out.match(/\{[\s\S]*\}/);
+      if (m) { try { data = JSON.parse(m[0]); } catch(e2) {} }
+    }
+    if (!data || !Array.isArray(data.strengths) || !Array.isArray(data.concerns) || !Array.isArray(data.keywords)) {
+      logLine('  ✗ Insights: invalid JSON shape', 'warn'); return false;
+    }
+    const clean = a => a.map(x => String(x || '').trim()).filter(Boolean);
+    const insights = { strengths: clean(data.strengths).slice(0, 3), concerns: clean(data.concerns).slice(0, 3), keywords: clean(data.keywords).slice(0, 8) };
+    if (!insights.strengths.length && !insights.concerns.length && !insights.keywords.length) {
+      logLine('  ✗ Insights: no usable content returned', 'warn'); return false;
+    }
+    client.insights = insights;
+    logLine('  ✓ Patient insights ready', 'ok');
+    return true;
+  } catch(e) { logLine('Insights error: ' + e.message, 'warn'); return false; }
+}
+
+function renderInsightsCard(){
+  const card = $('#insightsCard'), box = $('#insightsContent');
+  box.innerHTML = '';
+  const ins = client.insights;
+  if (!ins || (!(ins.strengths || []).length && !(ins.concerns || []).length && !(ins.keywords || []).length)) {
+    card.classList.add('hidden'); return;
+  }
+  const group = (title, items, color) => {
+    if (!(items || []).length) return;
+    const t = document.createElement('div');
+    t.style.cssText = 'margin-top:10px; font-weight:600; font-size:12px; color:' + color;
+    t.textContent = title;
+    box.appendChild(t);
+    items.forEach(x => {
+      const d = document.createElement('div');
+      d.style.cssText = 'font-size:13px; color:var(--text); margin-top:4px; padding-inline-start:12px; line-height:1.5';
+      d.textContent = '• ' + x;
+      box.appendChild(d);
+    });
+  };
+  group('💪 Strengths', ins.strengths, 'var(--ok)');
+  group('⚠ Concerns', ins.concerns, 'var(--warn)');
+  group('🔑 SEO keywords', ins.keywords, 'var(--info)');
+  card.classList.remove('hidden');
+}
+
 function mergeData(existing, newData){
   if (!newData) return existing;
   const merged = {...existing};
@@ -777,6 +849,7 @@ async function analyze(){
   $('#preview').classList.add('hidden');
   $('#nextRow').classList.add('hidden');
   $('#uspCard').classList.add('hidden');
+  $('#insightsCard').classList.add('hidden');
   const st = $('#analyzeStatus');
   st.textContent = ''; st.className = 'status';
 
@@ -850,6 +923,9 @@ async function analyze(){
   else if(!(client.name && client.prof && client.city)) logLine('⊘ USP generation skipped: needs name + profession + city', 'warn');
   else if(outOfTime()) logLine('⊘ USP generation skipped: pipeline time budget exhausted', 'warn');
   else if(await generateUSP(timeLeft())) renderUSPCard();
+  if(serverKeys.gemini && !outOfTime()) {
+    if(await generatePatientInsights(timeLeft())) renderInsightsCard();
+  }
 
   $('#f_name').value = client.name || '';
   $('#f_prof').value = client.prof || '';
@@ -939,6 +1015,15 @@ function buildPrompts(){
   const HOURS = client.hours ? `- Working hours: ${client.hours}` : '';
   const NOTES = client.notes ? `Additional: ${client.notes}` : '';
   const USP = client.selectedUSP ? `PRIMARY USP TO EMPHASIZE: ${client.selectedUSP}` : '';
+  let INSIGHTS = '';
+  if (client.insights) {
+    const lines = [
+      (client.insights.strengths || []).length ? '- Testimonial inspiration: ' + client.insights.strengths.join('; ') : '',
+      (client.insights.concerns || []).length ? '- Address in FAQ: ' + client.insights.concerns.join('; ') : '',
+      (client.insights.keywords || []).length ? '- SEO keywords: ' + client.insights.keywords.join(', ') : ''
+    ].filter(Boolean);
+    if (lines.length) INSIGHTS = 'PATIENT INSIGHTS TO USE:\n' + lines.join('\n');
+  }
 
   const landing=`You are a senior web designer specializing in medical landing pages. Build a complete page:
 
@@ -955,7 +1040,7 @@ ${PROOF}
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
-VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}
+VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
 
 SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location + footer.
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
@@ -1101,6 +1186,7 @@ function openItem(id){
   $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
   $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
   renderUSPCard();
+  renderInsightsCard();
   showTab('landing', document.querySelector('.tab'));
 
   go(3);
