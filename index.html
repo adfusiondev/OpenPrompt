@@ -140,6 +140,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
   <section id="s0" class="panel">
     <h1>The landing page prompt agent</h1>
     <p class="sub">Paste a Google Maps link. The agent extracts real business data using multiple free layers (SerpAPI + Google Custom Search + Jina AI reader + Gemini AI) — then builds production-ready prompts for a landing page + visual identity.</p>
+    <button class="btn ghost small" id="prospectorToggle" onclick="toggleProspector()" style="margin-bottom:14px">🎯 Prospector Mode ▾</button>
     <label>Google Maps URL</label>
     <input id="f_url" class="mono" placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/place/...">
     <div class="row">
@@ -148,6 +149,26 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <div class="status" id="analyzeStatus"></div>
     <div class="log hidden" id="log"></div>
     <div class="preview hidden" id="preview"></div>
+    <div id="prospectorCard" class="hidden" style="margin-top:20px; padding:16px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
+      <label style="color:var(--ok); font-weight:600; font-size:14px">🎯 Prospector Mode</label>
+      <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Filtered to show those WITHOUT a website — your ideal clients.</p>
+      <div class="grid2">
+        <div><label>Profession</label><input id="p_prof" placeholder="dental clinic"></div>
+        <div><label>City</label><input id="p_city" placeholder="Riyadh"></div>
+        <div><label>Min rating ⭐</label><input id="p_minRating" type="number" step="0.1" value="0" min="0" max="5"></div>
+        <div><label>Min reviews</label><input id="p_minReviews" type="number" value="0" min="0"></div>
+      </div>
+      <label class="toggle" style="margin-top:14px">
+        <input type="checkbox" id="p_noWeb" checked>
+        <span class="slider"></span>
+        <span>Show ONLY businesses without a website</span>
+      </label>
+      <div class="row">
+        <button class="btn" onclick="prospectSearch()">🔍 Search prospects</button>
+      </div>
+      <div class="status" id="prospectStatus"></div>
+      <div id="prospectResults" style="margin-top:14px"></div>
+    </div>
     <div class="row hidden" id="nextRow">
       <button class="btn" onclick="go(1)">Next: Review data →</button>
     </div>
@@ -957,7 +978,7 @@ async function analyze(){
 
   const parsed = parseMapsUrl(url);
   client = {
-    rawUrl: url, name: parsed.name || '',
+    rawUrl: url, name: parsed.name || '', source: '',
     prof: '', city: '', phone: '', address: '',
     rating: '', reviews: '', website: 'no', identity: 'no',
     website_url: '', hours: '', notes: ''
@@ -1060,6 +1081,163 @@ async function testBackend(){
     $('#keysWarning').classList.remove('hidden');
     out.innerHTML = '<div class="test-result err">✗ Offline at ' + base + ' — run <b>npm install && npm start</b> in the project folder</div>';
   }
+}
+
+/* ── Prospector Mode ── */
+let prospectorOpen = false;
+function toggleProspector(){
+  prospectorOpen = !prospectorOpen;
+  const card = $('#prospectorCard');
+  if(prospectorOpen){ card.classList.remove('hidden'); } else { card.classList.add('hidden'); }
+  $('#prospectorToggle').textContent = prospectorOpen ? '🎯 Prospector Mode ▴' : '🎯 Prospector Mode ▾';
+}
+
+async function prospectSearch(){
+  const prof = ($('#p_prof')?.value||'').trim();
+  const city = ($('#p_city')?.value||'').trim();
+  const minRating = parseFloat($('#p_minRating')?.value||'0') || 0;
+  const minReviews = parseInt($('#p_minReviews')?.value||'0') || 0;
+  const noWebOnly = $('#p_noWeb')?.checked !== false;
+
+  if(!prof || !city){ toast('Please enter both profession and city'); return; }
+
+  const st = $('#prospectStatus');
+  const results = $('#prospectResults');
+  st.textContent = '🔍 Searching for ' + prof + ' in ' + city + '...';
+  st.className = 'status info';
+  results.innerHTML = '';
+  logLine('🔍 Prospector: searching for "' + prof + '" in ' + city, 'info');
+
+  const params = new URLSearchParams({
+    engine: 'google_maps', type: 'search', hl: 'en',
+    q: '"' + prof + ' ' + city + '"'
+  });
+
+  const r = await apiFetch('/api/serpapi?' + params.toString(), {}, 12000);
+  if(r.offline){
+    st.textContent = '⚠ Proxy backend offline. Start the server with npm start.';
+    st.className = 'status err';
+    logLine('Prospector: proxy offline', 'err');
+    return;
+  }
+  if(!r.ok){
+    const em = r.data && r.data.error ? r.data.error : ('HTTP ' + r.status);
+    st.textContent = '✗ SerpAPI error: ' + em;
+    st.className = 'status err';
+    logLine('Prospector: SerpAPI error — ' + em, 'err');
+    return;
+  }
+  const data = r.data;
+  if(!data || typeof data !== 'object'){
+    st.textContent = '✗ Invalid response from SerpAPI';
+    st.className = 'status err';
+    return;
+  }
+
+  const places = data.local_results?.places || data.local_results || [];
+  if(!Array.isArray(places) || places.length === 0){
+    st.textContent = 'No results found for "' + prof + ' in ' + city + '"';
+    st.className = 'status warn';
+    logLine('Prospector: no results from SerpAPI', 'warn');
+    return;
+  }
+  logLine('Prospector: SerpAPI returned ' + places.length + ' raw results', 'info');
+
+  let filtered = places.slice(0, 20);
+  if(noWebOnly) filtered = filtered.filter(p => !p.website);
+  if(minRating > 0) filtered = filtered.filter(p => (p.rating||0) >= minRating);
+  if(minReviews > 0) filtered = filtered.filter(p => (p.reviews||0) >= minReviews);
+
+  logLine('Prospector: ' + filtered.length + ' remain after filters', 'info');
+
+  if(filtered.length === 0){
+    st.textContent = 'No prospects match your filters. Try loosening constraints.';
+    st.className = 'status warn';
+    return;
+  }
+
+  const withNoWeb = filtered.filter(p => !p.website).length;
+  st.textContent = '✓ Found ' + filtered.length + ' prospects — ' + withNoWeb + ' without website';
+  st.className = 'status ok';
+
+  renderProspectResults(filtered);
+}
+
+function renderProspectResults(places){
+  const box = $('#prospectResults');
+  box.innerHTML = '';
+  places.forEach(p => {
+    const hasWeb = !!p.website;
+    const card = document.createElement('div');
+    card.style.cssText = 'border:1px solid var(--border); border-radius:6px; padding:12px 16px; margin-bottom:10px; background:#111; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap';
+
+    const addr = p.address || '';
+    const addrParts = addr.split(',').map(s=>s.trim());
+    const city = addrParts.length >= 2 ? addrParts[addrParts.length - 2] : '';
+
+    let info = '<div style="flex:1; min-width:200px">';
+    info += '<b style="font-size:14px">' + (p.title || p.name || 'Unknown') + '</b>';
+    info += '<div style="color:var(--muted); font-size:12px; margin-top:2px">' + (p.type || p.category || '') + '</div>';
+    if(p.rating) info += '<div style="margin-top:4px; font-size:13px">⭐ ' + p.rating + (p.reviews ? ' (' + p.reviews + ' reviews)' : '') + '</div>';
+    if(p.phone) info += '<div style="margin-top:2px; font-size:13px">📞 ' + p.phone + '</div>';
+    if(addr) info += '<div style="margin-top:2px; font-size:12px; color:var(--muted)">📍 ' + (addr.length > 60 ? addr.slice(0,60) + '...' : addr) + '</div>';
+    info += '</div>';
+
+    let badges = '<div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0">';
+    badges += hasWeb
+      ? '<span style="font-size:11px; padding:3px 8px; border-radius:4px; background:#1a2818; color:var(--muted)">HAS WEBSITE</span>'
+      : '<span style="font-size:11px; padding:3px 8px; border-radius:4px; background:#2d3a20; color:var(--ok)">🎯 NO WEBSITE</span>';
+    badges += '<button class="btn small" onclick="useProspect(this)" data-place=\'' + JSON.stringify(p).replace(/'/g, "&#39;") + '\' data-city=\'' + (city||'').replace(/'/g, "&#39;") + '\'>Use →</button>';
+    badges += '</div>';
+
+    card.innerHTML = info + badges;
+    box.appendChild(card);
+  });
+}
+
+function useProspect(btn){
+  const p = JSON.parse(btn.getAttribute('data-place'));
+  const city = btn.getAttribute('data-city') || '';
+
+  const parsed = parseSearchPlace(p);
+  if(city && !parsed.city) parsed.city = city;
+
+  client = {
+    rawUrl: p.place_id ? 'https://maps.google.com/maps/place/?q=place_id:' + p.place_id : '',
+    name: parsed.name || p.title || '',
+    prof: parsed.prof || p.type || '',
+    city: parsed.city || city,
+    phone: parsed.phone || p.phone || '',
+    address: parsed.address || p.address || '',
+    rating: parsed.rating || (p.rating ? String(p.rating) : ''),
+    reviews: parsed.reviews || (p.reviews ? String(p.reviews) : ''),
+    website: p.website ? 'yes' : 'no',
+    identity: 'no',
+    website_url: parsed.website_url || p.website || '',
+    hours: parsed.hours || '',
+    notes: '',
+    source: 'prospected'
+  };
+
+  if(client.website_url && isJunkUrl(client.website_url)) client.website_url = '';
+  if(!client.website_url) client.website = 'no';
+
+  $('#f_name').value = client.name;
+  $('#f_prof').value = client.prof;
+  $('#f_city').value = client.city;
+  $('#f_phone').value = client.phone;
+  $('#f_rating').value = client.rating;
+  $('#f_reviews').value = client.reviews;
+  $('#f_website_url').value = client.website_url;
+  $('#f_hours').value = client.hours;
+  $('#f_address').value = client.address;
+  $('#f_notes').value = '';
+  $('#f_website').value = client.website;
+  $('#f_identity').value = 'no';
+
+  logLine('Prospector: selected "' + client.name + '" — navigating to Review', 'ok');
+  toast('✓ Loaded: ' + client.name);
+  go(1);
 }
 
 const VARIANT_DIRECTIVES = {
@@ -1261,7 +1439,7 @@ function renderHistory(){
   $('#histList').innerHTML = h.length ? h.map(x=>`
     <div class="hist-item">
       <div class="info"><b>${x.client.name}</b>
-        <span>${x.client.prof} • ${x.client.city} • ${x.ts}</span></div>
+        <span>${x.client.prof} • ${x.client.city} • ${x.ts}${x.client.source==='prospected'?' • <span style="color:var(--ok)">🎯 Prospected</span>':''}</span></div>
       <div class="row" style="margin:0">
         <button class="btn small" onclick="openItem(${x.id})">Open</button>
         <button class="btn ghost small" onclick="delItem(${x.id})">Delete</button>
