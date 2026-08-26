@@ -275,6 +275,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="tab active" onclick="showTab('landing',this)">Landing Page</button>
       <button class="tab" onclick="showTab('identity',this)">Visual Identity</button>
       <button class="tab" onclick="showTab('outreach',this)">Outreach Message</button>
+      <button class="tab" onclick="showTab('images',this)">🎨 Image Prompts</button>
     </div>
     <pre class="prompt" id="promptOut"></pre>
     <div class="row">
@@ -1131,6 +1132,79 @@ function buildOutreach(c, opts){
   }
 }
 
+function buildImagePrompts(c, opts){
+  const name = c.name || 'the clinic';
+  const prof = c.prof || 'medical clinic';
+  const city = c.city || '';
+  const catId = detectProfessionId((prof||'') + ' ' + (name||''));
+  const tone = opts.tone || 'trust';
+  const variant = opts.variant || 'conservative';
+
+  const scenes = {
+    dental: { subject: 'modern dental operatory with a smiling dentist gently guiding a patient into a dental chair', palette: 'white and sage green with subtle teal accents', env: 'bright, organized clinic interior with modern equipment' },
+    beauty: { subject: 'luxe beauty treatment room with an aesthetician preparing a facial station', palette: 'soft blush pink and warm gold with ivory tones', env: 'elegant salon interior with ambient lighting, marble surfaces, and fresh flowers' },
+    eye: { subject: 'bright optometry reception with professional staff greeting a patient at the front desk', palette: 'clean white and sky blue with silver accents', env: 'modern eye clinic interior with display frames and natural light' },
+    derma: { subject: 'modern dermatology consultation room with a dermatologist reviewing skin imaging', palette: 'white and soft peach with warm wood accents', env: 'clean, clinical yet inviting treatment room with state-of-the-art laser equipment' },
+    physio: { subject: 'spacious physiotherapy studio with a therapist guiding a patient through recovery exercises', palette: 'soft green and warm grey with natural wood tones', env: 'bright rehabilitation center with exercise equipment and natural light' },
+    legal: { subject: 'elegant law office with a confident attorney seated at a mahogany desk', palette: 'warm walnut wood, leather brown, and cream with brass accents', env: 'refined office with floor-to-ceiling bookshelves, legal volumes, and warm ambient lighting' },
+    medical: { subject: 'professional medical clinic reception with a welcoming healthcare team', palette: 'clean white and calm blue with silver accents', env: 'modern medical facility with a bright reception area and subtle greenery' },
+    restaurant: { subject: 'inviting restaurant interior with a chef presenting a signature dish at a beautifully set table', palette: 'warm amber and deep green with copper accents', env: 'stylish dining space with soft pendant lighting, textured walls, and elegant table settings' },
+    pharmacy: { subject: 'bright modern pharmacy with a pharmacist assisting a customer at the consultation counter', palette: 'clean white and fresh green with soft blue accents', env: 'well-organized pharmacy interior with lit shelving and a welcoming consultation area' },
+    veterinary: { subject: 'friendly veterinary clinic with a vet gently examining a pet on the examination table', palette: 'soft teal and warm beige with natural wood tones', env: 'bright, caring clinic environment with pet-friendly design elements' }
+  };
+
+  const tones = {
+    trust: { lighting: 'soft natural light streaming through large windows', style: 'clean, calm, clinical, soft natural light' },
+    luxury: { lighting: 'warm golden hour light with subtle rim lighting', style: 'elegant, premium, warm gold accents, cinematic light' },
+    friendly: { lighting: 'bright warm daylight with soft shadows', style: 'warm, inviting, candid smiles, bright daylight' },
+    modern: { lighting: 'cool-toned studio light with clean shadows', style: 'minimal, tech-forward, cool tones, studio light' }
+  };
+
+  const variantExtras = {
+    bold: ', high contrast, strong vivid colors, dramatic lighting',
+    premium: ', luxury gold accents, refined elegance, bespoke details',
+    conservative: ''
+  };
+
+  const s = scenes[catId] || scenes.medical;
+  const t = tones[tone] || tones.trust;
+  const vExtra = variantExtras[variant] || '';
+
+  const footer = '\n\n---\n_for Flux/DALL-E: remove the --ar and --v flags from each prompt._';
+
+  const prompts = [
+    {
+      usage: 'HERO IMAGE (16:9) — Place at the top of the landing page',
+      ratio: '16:9',
+      body: 'A wide cinematic shot of ' + s.subject + '. The ' + s.env + '. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic, shot on Sony A7IV, 35mm lens, shallow depth of field'
+    },
+    {
+      usage: 'DOCTOR / TEAM PORTRAIT (4:5) — Use in the About section',
+      ratio: '4:5',
+      body: 'Professional portrait of the lead practitioner at ' + name + ', standing confidently in the clinic with arms crossed and a warm smile. ' + s.env + '. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic, shot on 85mm portrait lens, soft bokeh background'
+    },
+    {
+      usage: 'INTERIOR / RECEPTION (16:9) — Use in the trust or gallery section',
+      ratio: '16:9',
+      body: 'Wide-angle shot of the reception and waiting area of ' + name + '. ' + s.env + '. Empty, clean, and inviting. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic, architectural photography style, 24mm wide-angle lens'
+    },
+    {
+      usage: 'SOCIAL MEDIA POST (1:1) — Optimized for Instagram and ad campaigns',
+      ratio: '1:1',
+      body: 'Eye-catching square social media image for ' + name + '. ' + s.subject + '. Bold headline space at the top. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic with graphic overlay area, Instagram-ready composition'
+    },
+    {
+      usage: 'LOGO DIRECTION — Descriptive prompt for AI logo generators',
+      ratio: '1:1',
+      body: 'Minimalist logo concept for ' + name + ', a ' + prof + ' in ' + city + '. Clean geometric icon combining a medical/professional symbol with the business initials. Color palette: ' + s.palette + '. Flat design, vector style, no gradients, white background, scalable for business cards and signage'
+    }
+  ];
+
+  return prompts.map(p =>
+    '# ' + p.usage + '\n\n' + p.body + ' --ar ' + p.ratio + ' --v 6'
+  ).join('\n\n---\n\n') + footer;
+}
+
 function mergeData(existing, newData){
   if (!newData) return existing;
   const merged = {...existing};
@@ -1535,7 +1609,8 @@ OUTPUT: single self-contained HTML/CSS/JS file.`;
 DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, patient folder, social post), usage guidelines.`;
 
   const outreach = buildOutreach(client, options);
-  return {landing, identity, outreach};
+  const images = buildImagePrompts(client, options);
+  return {landing, identity, outreach, images};
 }
 function generate(){
   collect();
@@ -1552,7 +1627,7 @@ function showTab(key, el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
   $('#promptOut').textContent=lastPrompts[key]||'';
-  $('#aiBtn').style.display = key==='outreach' ? 'none' : '';
+  $('#aiBtn').style.display = (key==='outreach' || key==='images') ? 'none' : '';
 }
 function copyCurrent(){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>toast('⧉ Copied'));
@@ -1592,7 +1667,8 @@ function downloadCurrent(){
     `- Visual tone: ${options.tone}`,
     '', '## Landing Page Prompt', '', lastPrompts.landing || '(not generated)',
     '', '## Visual Identity Prompt', '', lastPrompts.identity || '(not generated)',
-    '', '## Outreach Message', '', lastPrompts.outreach || '(not generated)', ''
+    '', '## Outreach Message', '', lastPrompts.outreach || '(not generated)',
+    '', '## Image Prompts', '', lastPrompts.images || '(not generated)', ''
   ].join('\n');
   dl(`openprompt-report-${(client.name||'client').replace(/[^a-z0-9]/gi,'-').toLowerCase()}.md`, md);
   toast('↓ Report exported');

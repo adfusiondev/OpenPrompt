@@ -23,6 +23,7 @@
 | 7.5 | Unified Outreach Templates (AR/EN/FR) | 15 دقيقة | 100% | ✅ |
 | 7.6 | Outreach Richness Guarantee + Arabic Typo Fix | 15 دقيقة | 100% | ✅ |
 | 8 | Unified Mode Switcher (Extract ⇄ Prospector) | 15 دقيقة | 100% | ✅ |
+| 9 | Image Prompts Generator (Midjourney/Flux/DALL-E) | 30 دقيقة | 100% | ✅ |
 
 ---
 
@@ -484,6 +485,38 @@ git push origin main --tags
 - [ ] تغيير اللغة يدوياً يعمل
 - [ ] لا أخطاء في Console
 - [ ] الميزات القديمة لم تتأثر
+
+---
+
+# 🟣 المرحلة 9 — Image Prompts Generator (Midjourney/Flux/DALL-E)
+
+## 🎯 الهدف
+إضافة تبويب رابع "🎨 Image Prompts" في النتائج — يولّد 5 برومبتات صور جاهزة لتوليد الصور بالذكاء الاصطناعي، مخصصة حسب مهنة العميل والنبرة البصرية المختارة.
+
+## ⏱️ الوقت: 30 دقيقة | 📈 النجاح: 100%
+
+## الميزات المُنجزة
+- ✅ تبويب رابع "🎨 Image Prompts" في صف التبويبات
+- ✅ `buildImagePrompts(c, opts)` — تولد 5 برومبتات:
+  1. HERO IMAGE (16:9) — أعلى صفحة الهبوط
+  2. DOCTOR/TEAM PORTRAIT (4:5) — قسم About
+  3. INTERIOR/RECEPTION (16:9) — قسم الثقة
+  4. SOCIAL MEDIA POST (1:1) — للإعلانات
+  5. LOGO DIRECTION — وصف لتوليد الشعارات
+- ✅ مشاهد حسب المهنة: dental, beauty, eye, derma, physio, legal, medical, restaurant, pharmacy, veterinary
+- ✅ أنماط نبرة حسب الاختيار: trust/luxury/friendly/modern
+- ✅ تأثيرات التصميم: bold → high contrast, premium → luxury accents
+- ✅ Footer ملاحظة: "For Flux/DALL-E: remove the --ar/--v flags"
+- ✅ التكامل مع `buildPrompts()`, `generate()`, `downloadCurrent()`, `showTab()`
+- ✅ ✨ Improve معطّل لتبويب الصور
+- ✅ الحفظ/الاستعادة التلقائية عبر History
+
+## ✅ معايير النجاح
+- [ ] تبويب "🎨 Image Prompts" يظهر ويعرض 5 برومبتات
+- [ ] تغيير المهنة يغيّر المشاهد
+- [ ] تغيير النبرة يغيّر الإضاءة/الألوان
+- [ ] Copy + Download يشمل Image Prompts
+- [ ] History → فتح عميل قديم → تبويب الصور مستعاد
 
 ---
 

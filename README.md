@@ -136,6 +136,16 @@
 - **equivaleza موحدة لجميع اللغات**: الرسالة العربية والفرنسية الآن بنفس بنية الإنجليزية ( greeted + ملاحظة + مشهد تنافسي + تحليل فجوات + CTA)
 - تُحفظ مع العميل في History وتُستعاد عند الفتح
 
+### 🎨 Image Prompts (جديد)
+تبويب رابع في صفحة النتائج يولّد 5 برومبتات صور جاهزة لتوليد الصور بالذكاء الاصطناعي:
+
+- **5 deliverables**: Hero Image (16:9), Team Portrait (4:5), Interior (16:9), Social Media (1:1), Logo Direction
+- **مشاهد حسب المهنة**: dental, beauty, eye, derma, physio, legal, medical, restaurant, pharmacy, veterinary
+- **أنماط نبرة**: trust (طبيعي) / luxury (فاخر) / friendly (ودّي) / modern (عصري)
+- **تأثيرات التصميم**: Bold → high contrast، Premium → luxury accents
+- متوافق مع Midjourney / Flux / DALL-E
+- يُحفظ في History ويُستعاد تلقائيًا
+
 ---
 
 ---
