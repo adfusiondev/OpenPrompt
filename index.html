@@ -1217,6 +1217,7 @@ function mergeData(existing, newData){
 }
 
 async function analyze(){
+  currentId = null;
   let url = $('#f_url').value.trim();
   if(!url){ toast('Please paste a link first'); return; }
   if(!url.includes('google.com/maps') && !url.includes('goo.gl')){
@@ -1484,6 +1485,7 @@ function renderProspectResults(places){
 }
 
 function useProspect(btn){
+  currentId = null;
   const p = JSON.parse(btn.getAttribute('data-place'));
   const city = btn.getAttribute('data-city') || '';
 
@@ -1709,11 +1711,17 @@ async function doImprove(){
 function getHist(){ return JSON.parse(localStorage.getItem(LS_H)||'[]'); }
 function saveOrUpdate(){
   const h=getHist();
-  const item={id:currentId||Date.now(), ts:new Date().toISOString().replace('T',' ').slice(0,16), client, options, prompts:lastPrompts};
-  const i=h.findIndex(x=>x.id===item.id);
-  i>=0 ? h[i]=item : h.unshift(item);
-  currentId=item.id;
-  localStorage.setItem(LS_H, JSON.stringify(h));
+  const ts=new Date().toISOString().replace('T',' ').slice(0,16);
+  if(currentId){
+    const i=h.findIndex(x=>x.id===currentId);
+    if(i>=0){ h[i]={id:currentId, ts, client, options, prompts:lastPrompts}; }
+    else{ const item={id:Date.now(), ts, client, options, prompts:lastPrompts}; h.unshift(item); currentId=item.id; }
+  } else {
+    const item={id:Date.now(), ts, client, options, prompts:lastPrompts};
+    h.unshift(item); currentId=item.id;
+  }
+  try { localStorage.setItem(LS_H, JSON.stringify(h)); }
+  catch(e){ toast('Storage full — export your data and clean History'); }
 }
 function renderHistory(){
   const q=($('#histSearch')?.value||'').trim().toLowerCase();
