@@ -102,6 +102,13 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 .warning-box{background:#2a1f10; border:1px solid #5a3a18; border-radius:6px; padding:12px 16px; margin-top:16px; color:var(--warn); font-size:13px; line-height:1.6}
 .warning-box b{color:var(--warn)}
 
+.alert-banner{background:#2a1818; border:1px solid #5a2020; border-radius:6px; padding:12px 16px; margin-top:14px; color:var(--err); font-size:13px; line-height:1.6; display:flex; align-items:flex-start; gap:10px}
+.alert-banner .alert-icon{font-size:18px; flex-shrink:0; line-height:1.4}
+.alert-banner .alert-body{flex:1}
+.alert-banner b{color:var(--err)}
+.alert-banner.warn{background:#2a1f10; border-color:#5a3a18; color:var(--warn)}
+.alert-banner.warn b{color:var(--warn)}
+
 .toggle{display:flex; align-items:center; gap:10px; margin-top:12px; cursor:pointer}
 .toggle input{display:none}
 .toggle .slider{width:40px; height:22px; background:#333; border-radius:11px; position:relative; transition:.2s; flex-shrink:0}
@@ -291,7 +298,7 @@ const LS_H='op_history_v1', LS_S='op_settings_v1';
 })();
 let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
 const STEPS=['URL','Data','Options','Results','History'];
-const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest','gemini-2.5-flash'];
+const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest'];
 const PROXY_DEFAULT='http://localhost:3000';
 
 function apiBase(){
@@ -317,7 +324,7 @@ async function apiFetch(path, opts = {}, timeoutMs = 15000){
 function isJunkUrl(u){ return !u || /(google\.|goo\.gl|gstatic\.|ggpht\.|googleusercontent\.|lh3\.)/i.test(u); }
 
 async function callGemini(body, timeoutMs){
-  let lastErr='';
+  let lastErr='', allRateLimited=true;
   for (const model of GEMINI_MODELS){
     try {
       const r = await apiFetch('/api/gemini', {
@@ -328,14 +335,17 @@ async function callGemini(body, timeoutMs){
       if (r.ok) return { ok:true, model, data:r.data };
       if (r.status === 503 && r.data && r.data.code === 'NO_KEY') return { ok:false, error:String(r.data.error||'GEMINI_API_KEY missing on proxy') };
       const t = typeof r.data==='string' ? r.data : JSON.stringify(r.data||{});
-      lastErr = `${model}: HTTP ${r.status} — ${t.slice(0,120)}`;
-      if (r.status === 404 || r.status === 429 ||
+      lastErr = `${model}: HTTP ${r.status} \u2014 ${t.slice(0,120)}`;
+      const isFallbackable = r.status === 404 || r.status === 429 ||
           (r.status === 503 && /high demand|overload|resource exhausted|temporarily unavailable/i.test(t)) ||
-          /not found|not available|unsupported|deprecated/i.test(t)) continue;
+          /not found|not available|unsupported|deprecated/i.test(t);
+      if (r.status !== 429 && !/resource exhausted|quota exceeded/i.test(t)) allRateLimited = false;
+      if (isFallbackable) continue;
+      allRateLimited = false;
       break;
-    } catch(e) { lastErr = `${model}: ${e.message}`; break; }
+    } catch(e) { lastErr = `${model}: ${e.message}`; allRateLimited = false; break; }
   }
-  return { ok:false, error:lastErr };
+  return { ok:false, error:lastErr, rateLimited: allRateLimited };
 }
 
 const PROF_CATS = [
@@ -389,6 +399,20 @@ function logLine(msg, type='info'){
   log.scrollTop = log.scrollHeight;
 }
 function clearLog(){ $('#log').innerHTML = ''; $('#log').classList.add('hidden'); }
+function showAlertBanner(msg, type='err'){
+  let b = $('#alertBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'alertBanner';
+    const st = $('#analyzeStatus');
+    if (st && st.parentNode) st.parentNode.insertBefore(b, st);
+    else { const main = $('main'); if (main) main.appendChild(b); }
+  }
+  b.className = 'alert-banner ' + type;
+  b.innerHTML = '<span class="alert-icon">' + (type==='warn' ? '\u26a0' : '\u2716') + '</span><span class="alert-body">' + msg + '</span>';
+  b.classList.remove('hidden');
+}
+function hideAlertBanner(){ const b = $('#alertBanner'); if (b) b.classList.add('hidden'); }
 
 function showPreview(){
   const p = $('#preview');
@@ -716,7 +740,12 @@ Return ONLY valid JSON with this exact schema (no markdown, no explanation):
       generationConfig:{ responseMimeType:'application/json', temperature: 0.2 }
     }, Math.min(25000, budgetMs));
 
-    if (!res.ok) { logLine('  ✗ Gemini error: ' + res.error, 'err'); return null; }
+    if (!res.ok) {
+      logLine('  \u2717 Gemini error: ' + res.error, 'err');
+      client._geminiFailed = true;
+      if (res.rateLimited) client._geminiRateLimited = true;
+      return null;
+    }
     logLine('  → Model: ' + res.model, 'info');
 
     const out = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -880,6 +909,7 @@ async function analyze(){
   const btn = $('#analyzeBtn');
   btn.disabled = true;
   clearLog();
+  hideAlertBanner();
   $('#preview').classList.add('hidden');
   $('#nextRow').classList.add('hidden');
   $('#uspCard').classList.add('hidden');
@@ -943,6 +973,11 @@ async function analyze(){
   else {
     const d = await extractGeminiAI(url, client, timeLeft());
     if (d) client = mergeData(client, d);
+    else if (client._geminiRateLimited) {
+      showAlertBanner('<b>Rate limit hit</b> \u2014 Gemini API quota exhausted. All fallback models also failed. Data from other layers is still available; try again later or add a new GEMINI_API_KEY.', 'err');
+    } else if (client._geminiFailed) {
+      showAlertBanner('<b>Gemini fallback exhausted</b> \u2014 all models returned errors. Partial data from SerpAPI/Jina is shown. Configure GEMINI_API_KEY in .env for full extraction.', 'warn');
+    }
   }
 
   if (isJunkUrl(client.website_url)) client.website_url = '';
