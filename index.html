@@ -122,6 +122,8 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 .seg button:not(:last-child){border-right:1px solid var(--border)}
 .seg button.active{background:var(--light); color:var(--dark); font-weight:600}
 .seg button:hover:not(.active){color:var(--text)}
+.mode-row{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.mode-btn.active{background:var(--ok);border-color:var(--ok);color:#0a0a09;font-weight:700}
 </style>
 </head>
 <body>
@@ -140,16 +142,24 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
   <section id="s0" class="panel">
     <h1>The landing page prompt agent</h1>
     <p class="sub">Paste a Google Maps link. The agent extracts real business data using multiple free layers (SerpAPI + Google Custom Search + Jina AI reader + Gemini AI) — then builds production-ready prompts for a landing page + visual identity.</p>
-    <button class="btn ghost small" id="prospectorToggle" onclick="toggleProspector()" style="margin-bottom:14px">🎯 Prospector Mode ▾</button>
-    <label>Google Maps URL</label>
-    <input id="f_url" class="mono" placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/place/...">
-    <div class="row">
-      <button class="btn" id="analyzeBtn" onclick="analyze()">⚡ Extract data</button>
+    <div class="mode-row">
+      <button class="btn mode-btn active" id="modeExtractBtn" onclick="switchMode('extract')">⚡ Extract data</button>
+      <button class="btn mode-btn" id="modeProspectBtn" onclick="switchMode('prospector')">🎯 Prospector Mode</button>
     </div>
-    <div class="status" id="analyzeStatus"></div>
-    <div class="log hidden" id="log"></div>
-    <div class="preview hidden" id="preview"></div>
-    <div id="prospectorCard" class="hidden" style="margin-top:20px; padding:16px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
+    <div id="extractPanel">
+      <label>Google Maps URL</label>
+      <input id="f_url" class="mono" placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/place/...">
+      <div class="row">
+        <button class="btn" id="analyzeBtn" onclick="analyze()">⚡ Extract data</button>
+      </div>
+      <div class="status" id="analyzeStatus"></div>
+      <div class="log hidden" id="log"></div>
+      <div class="preview hidden" id="preview"></div>
+      <div class="row hidden" id="nextRow">
+        <button class="btn" onclick="go(1)">Next: Review data →</button>
+      </div>
+    </div>
+    <div id="prospectorPanel" class="hidden">
       <label style="color:var(--ok); font-weight:600; font-size:14px">🎯 Prospector Mode</label>
       <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Filtered to show those WITHOUT a website — your ideal clients.</p>
       <div class="grid2">
@@ -168,9 +178,6 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       </div>
       <div class="status" id="prospectStatus"></div>
       <div id="prospectResults" style="margin-top:14px"></div>
-    </div>
-    <div class="row hidden" id="nextRow">
-      <button class="btn" onclick="go(1)">Next: Review data →</button>
     </div>
   </section>
 
@@ -433,6 +440,7 @@ function go(n){
   for(let i=0;i<5;i++) $('#s'+i).classList.toggle('hidden', i!==n);
   $('#stepper').innerHTML = STEPS.map((s,i)=>
     `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
+  if(n===0) switchMode('extract');
   if(n===4) renderHistory();
   window.scrollTo(0,0);
 }
@@ -1266,13 +1274,16 @@ async function testBackend(){
   }
 }
 
-/* ── Prospector Mode ── */
-let prospectorOpen = false;
-function toggleProspector(){
-  prospectorOpen = !prospectorOpen;
-  const card = $('#prospectorCard');
-  if(prospectorOpen){ card.classList.remove('hidden'); } else { card.classList.add('hidden'); }
-  $('#prospectorToggle').textContent = prospectorOpen ? '🎯 Prospector Mode ▴' : '🎯 Prospector Mode ▾';
+/* ── Mode Switcher ── */
+let currentMode = 'extract';
+function switchMode(mode){
+  currentMode = mode;
+  const isExtract = mode === 'extract';
+  $('#extractPanel').classList.toggle('hidden', !isExtract);
+  $('#prospectorPanel').classList.toggle('hidden', isExtract);
+  $('#modeExtractBtn').classList.toggle('active', isExtract);
+  $('#modeProspectBtn').classList.toggle('active', !isExtract);
+  logLine('Mode: ' + mode);
 }
 
 async function prospectSearch(){

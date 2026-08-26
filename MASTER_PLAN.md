@@ -21,6 +21,7 @@
 | 6 | Prospector Mode (البحث عن العملاء) | 30-45 دقيقة | 95% | ✅ |
 | 7 | Competitor Gap Analysis + Outreach Language | 45-60 دقيقة | 90% | ✅ |
 | 7.5 | Unified Outreach Templates (AR/EN/FR) | 15 دقيقة | 100% | ✅ |
+| 8 | Unified Mode Switcher (Extract ⇄ Prospector) | 15 دقيقة | 100% | ✅ |
 
 ---
 
@@ -403,6 +404,32 @@ git push origin main --tags
 - [ ] رسالة AR تحتوي على المشهد التنافسي
 - [ ] رسالة FR تحتوي على المشهد التنافسي
 - [ ] رسالة EN تحتوي على المشهد التنافسي
+- [ ] لا أخطاء في Console
+
+---
+
+# 🔵 المرحلة 8 — Unified Mode Switcher (Extract ⇄ Prospector)
+
+## 🎯 الهدف
+استبدال أزر التبديل القديم مع استخدام نمطج `.mode-row` + `.mode-btn` مع `.active`.
+
+## ⏱️ الوقت: 15 دقيقة | 📈 النجاح: 100%
+
+## التغييرات
+- ✅ CSS: `.mode-row` و `.mode-btn.active` قبل `</style>`
+- ✅ HTML: استخدام `.mode-row` بدل الأزرار التنضيفية (⚡ Extract + 🎯 Prospector)
+- ✅ HTML: `<div id="extractPanel">` يحطو الوضع الأصلي كاملاً
+- ✅ HTML: `<div id="prospectorPanel" class="hidden">` يحطو محتويات Prospector
+- ✅ JS: حذف `toggleProspector()` وضمن `prospectorOpen`
+- ✅ JS: ضمن `switchMode(mode)` جديدة تتبدل الوضعين
+- ✅ JS: `go(0)` يعيد `switchMode('extract')` للعودة الافتراضية
+- ✅ البحث + Use → يعمل كما كان
+
+## ✅ معايير النجاح
+- [ ] الحالة الافتراضية: Extract mode
+- [ ] ضغط 🎯 Prospector → يظهر panel البحث فقط
+- [ ] ضغط ⚡ Extract → يعود لمسارة URL
+- [ ] Prospector search + "Use →" يعمل
 - [ ] لا أخطاء في Console
 
 ---
