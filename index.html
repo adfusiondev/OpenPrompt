@@ -301,6 +301,18 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn ghost" id="discardBtn" onclick="discardClient()" style="border-color:#5a2020; color:var(--err)">✖ Discard &amp; close</button>
       <button class="btn ghost" onclick="go(2)">← Back</button>
     </div>
+    <div id="packCard" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
+      <label style="color:#a78bfa; font-weight:600">📦 Project Pack — ready-to-build client folder</label>
+      <p class="sub" style="font-size:12px">Download the 4 files into one folder, then open it in OpenCode/Cursor/Claude Code.</p>
+      <div class="row">
+        <button class="btn ghost small" onclick="dlPack('index')">index.html</button>
+        <button class="btn ghost small" onclick="dlPack('agents')">AGENTS.md</button>
+        <button class="btn ghost small" onclick="dlPack('context')">PROJECT_CONTEXT.md</button>
+        <button class="btn ghost small" onclick="dlPack('status')">PROJECT_STATUS.md</button>
+        <button class="btn small" onclick="dlPackAll()">⬇ Download all (4 files)</button>
+        <button class="btn ghost small" onclick="copyHandoff()">⧉ Copy handoff prompt</button>
+      </div>
+    </div>
   </section>
 
   <section id="s4" class="panel hidden">
@@ -2164,6 +2176,349 @@ function importLeads(input){
     input.value='';
   };
   reader.readAsText(file);
+}
+
+/* ── Project Pack Generators (deterministic templates, NO AI calls) ── */
+const PACK_TONES = {
+  trust:    { bg:'#F5F7FA', primary:'#2C5F7C', accent:'#4ade80', text:'#1f2937', heading:'#2C5F7C', card:'#ffffff' },
+  luxury:   { bg:'#1a1a1a', primary:'#c9a227', accent:'#f5f0e6', text:'#f5f0e6', heading:'#c9a227', card:'#24201a' },
+  friendly: { bg:'#FFF8F0', primary:'#E76F51', accent:'#2A9D8F', text:'#2b2b2b', heading:'#E76F51', card:'#ffffff' },
+  modern:   { bg:'#0f172a', primary:'#38bdf8', accent:'#e2e8f0', text:'#e2e8f0', heading:'#38bdf8', card:'#1e293b' }
+};
+function packPhoneDigits(p){ return String(p||'').replace(/\D/g,''); }
+function packMapData(c){
+  const q = (c.lat && c.lng) ? (c.lat+','+c.lng) : encodeURIComponent(c.address||c.name||'');
+  return {
+    mapLink: c.rawUrl || ('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent((c.name||'')+' '+((c.address||c.city)||''))),
+    embedSrc: 'https://maps.google.com/maps?q=' + q + '&z=15&output=embed',
+    dirsLink: 'https://www.google.com/maps/dir/?api=1&destination=' + q
+  };
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function buildPackIndex(client, options){
+  const c = client || {}, o = options || {};
+  const isAr = o.lang === 'ar';
+  const tone = PACK_TONES[o.tone] || PACK_TONES.trust;
+  const font = isAr ? 'Tajawal' : 'Inter';
+  const dir = isAr ? ' dir="rtl"' : '';
+  const name = c.name || 'Our Clinic';
+  const prof = c.prof || 'Clinic';
+  const city = c.city || '';
+  const rating = c.rating || '5.0';
+  const reviews = c.reviews || '0';
+  const phone = c.phone || '';
+  const phoneDigits = packPhoneDigits(phone);
+  const waLink = phoneDigits ? ('https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent('Hello ' + name)) : '#booking';
+  const map = packMapData(c);
+  const ctaLabels = {whatsapp:'Book via WhatsApp', call:'Call Now', booking:'Book Appointment', visit:'Visit Us'};
+  const cta = ctaLabels[o.cta] || 'Book Now';
+  const ctaHref = o.cta==='whatsapp' ? waLink : (o.cta==='call' ? ('tel:'+phone) : (o.cta==='visit' ? map.dirsLink : '#booking'));
+  const usp = c.selectedUSP || ('Trusted ' + prof + (city ? ' in ' + city : ''));
+  const catId = detectProfessionId((prof||'')+' '+(name||''));
+  const services = (SERVICES_HINT[catId] || SERVICES_HINT.medical).split(',').map(s=>s.trim()).filter(Boolean).slice(0,6);
+  const strengths = (c.insights && Array.isArray(c.insights.strengths)) ? c.insights.strengths : [];
+  const concerns  = (c.insights && Array.isArray(c.insights.concerns))  ? c.insights.concerns  : [];
+  const title = name + ' | ' + prof + (city ? ' in ' + city : '');
+  const n = s => esc(s);
+
+  const serviceCards = services.map((s,i)=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:18px"><h3 style="color:'+tone.heading+';margin:0 0 6px">'+n(s.split(' & ')[0])+'</h3><p style="color:'+tone.text+';margin:0;font-size:15px;line-height:1.6">'+n(s)+'</p></div>').join('\n        ');
+
+  const reviewCards = strengths.length ? strengths.map(s=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:20px"><p style="color:'+tone.text+';font-size:16px;line-height:1.7;margin:0;font-style:italic">\u201c'+n(s)+'\u201d</p><div style="color:#f59e0b;margin-top:10px;font-size:18px">\u2605\u2605\u2605\u2605\u2605</div></div>').join('\n        ')
+    : '<div style="color:'+tone.text+'">Trusted by patients across '+n(city||'the area')+'.</div>';
+
+  const faqItems = concerns.length ? concerns.map((co,i)=>'<details style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px"><summary style="cursor:pointer;font-weight:600;color:'+tone.heading+'">'+n('Q'+(i+1))+'. Will I get a clear, upfront plan?</summary><p style="color:'+tone.text+';margin:10px 0 0">'+n(co)+'.</p></details>').join('\n        ')
+    : '<div style="color:'+tone.text+'">Contact us — we are happy to answer any question.</div>';
+
+  const langAttr = isAr ? ' ar' : '';
+  const html = `<!DOCTYPE html>
+<html lang="`+ (isAr?'ar':'en') + `"` + dir + `>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>`+n(title)+`</title>
+<meta name="description" content="`+n(name)+` — `+n(prof+(city?' in '+city:'')) +`. `+n(rating)+`\u2b50 with `+n(reviews)+` reviews. `+n(usp)+`.">
+<meta property="og:title" content="`+n(title)+`">
+<meta property="og:description" content="`+n(usp)+`">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=`+font+`:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{ --bg:`+tone.bg+`; --primary:`+tone.primary+`; --accent:`+tone.accent+`; --text:`+tone.text+`; --heading:`+tone.heading+`; --card:`+tone.card+`; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'`+font+`',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+.container{max-width:1080px;margin:0 auto;padding:0 20px}
+.btn{display:inline-block;background:var(--primary);color:#fff;border:none;border-radius:8px;padding:16px 32px;font-size:17px;font-weight:700;text-decoration:none;cursor:pointer;transition:transform .15s}
+.btn:hover{transform:translateY(-2px)}
+.hero{background:linear-gradient(135deg,var(--primary),var(--heading));color:#fff;text-align:center;padding:90px 20px}
+.hero h1{font-size:44px;margin-bottom:14px}
+.hero p{font-size:20px;opacity:.95;max-width:640px;margin:0 auto 26px}
+.rating-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.18);border-radius:999px;padding:8px 18px;margin-bottom:20px;font-weight:600}
+.trustbar{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;background:var(--card);padding:22px;border-bottom:1px solid #e5e7eb}
+.trustbar div{text-align:center}
+.trustbar b{display:block;font-size:26px;color:var(--heading)}
+.trustbar span{color:var(--text);opacity:.75;font-size:14px}
+section{padding:64px 20px}
+section h2{text-align:center;font-size:32px;color:var(--heading);margin-bottom:40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.about{background:var(--card);border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}
+.about .grid p{font-size:16px;color:var(--text);line-height:1.8}
+.contact{text-align:center}
+.contact .btn{margin-top:8px}
+iframe{border:0;width:100%;height:420px;border-radius:12px;display:block}
+.mapmeta{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-top:18px;color:var(--text)}
+.mapmeta a{color:var(--primary);font-weight:600}
+footer{background:var(--heading);color:#fff;text-align:center;padding:26px 20px}
+.floating-wa{position:fixed;bottom:24px;`+ (isAr?'left':'right') +`:24px;width:60px;height:60px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 4px 16px rgba(0,0,0,.25);text-decoration:none;z-index:10}
+details{margin-bottom:12px}
+@media(max-width:640px){.hero h1{font-size:32px}.trustbar{gap:20px}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <span class="rating-badge">`+n(rating)+`\u2b50 (`+n(reviews)+` reviews)</span>
+    <h1>`+n(usp)+`</h1>
+    <p>`+n(name)+` — `+n(prof)+(city?' in '+n(city):'')+`. We're here to give you a clear, comfortable and stress-free experience.</p>
+    <a class="btn" href="`+ctaHref+`"`+(ctaHref==='#booking'?' onclick="document.getElementById(\'booking\').scrollIntoView()"':'')+`>`+n(cta)+`</a>
+  </div>
+</header>
+
+<div class="trustbar">
+  <div><b>`+n(rating)+`\u2b50</b><span>Google rating</span></div>
+  <div><b>`+n(reviews)+`</b><span>Reviews</span></div>
+  <div><b>`+n(city||'Local')+`</b><span>Location</span></div>
+</div>
+
+<section id="services" class="services">
+  <div class="container">
+    <h2>Our Services</h2>
+    <div class="grid">
+        `+serviceCards+`
+    </div>
+  </div>
+</section>
+
+<section id="about" class="about">
+  <div class="container">
+    <h2>About Us</h2>
+    <div class="grid">
+      <p>`+n(name)+` is a `+n(prof)+` `+(city?' in '+n(city):'')+` built around one goal: making every visit clear, comfortable and results-driven.</p>
+      `+(c.hours?'<p><b>Working hours:</b> '+n(c.hours)+'</p>':'')+`
+      `+(c.address?'<p><b>Address:</b> '+n(c.address)+'</p>':'')+`
+    </div>
+  </div>
+</section>
+
+<section id="reviews" class="reviews">
+  <div class="container">
+    <h2>What Patients Say</h2>
+    <div class="grid">
+        `+reviewCards+`
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="faq">
+  <div class="container">
+    <h2>Frequently Asked Questions</h2>
+    <div>
+        `+faqItems+`
+    </div>
+  </div>
+</section>
+
+<section id="booking" class="contact">
+  <div class="container">
+    <h2>Visit Us</h2>
+    <iframe src="`+map.embedSrc+`" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="`+n(name)+` location map"></iframe>
+    <div class="mapmeta">
+      `+(c.address?'<span>\u26f3 '+n(c.address)+'</span>':'')+`
+      `+(c.hours?'<span>\u23f0 '+n(c.hours)+'</span>':'')+`
+      `+(phone?'<span>\u260e '+n(phone)+'</span>':'')+`
+      <a href="`+map.dirsLink+`" target="_blank" rel="noopener">\u2192 Get Directions</a>
+    </div>
+    <div style="margin-top:26px"><a class="btn" href="`+ctaHref+`"`+(ctaHref==='#booking'?' onclick="document.getElementById(\'booking\').scrollIntoView()"':'')+`>`+n(cta)+`</a></div>
+  </div>
+</section>
+
+<footer>
+  <p>&copy; `+new Date().getFullYear()+` `+n(name)+` `+(city?' \u2014 '+n(city):'')+` · <a href="`+map.dirsLink+`" style="color:#fff">Get Directions</a></p>
+</footer>
+
+`+(phoneDigits?'<a class="floating-wa" href="'+waLink+'" target="_blank" rel="noopener" title="Chat on WhatsApp">\u2711</a>':'')+`
+
+</body>
+</html>`;
+  return html;
+}
+
+function buildPackAgents(client, options){
+  const c = client || {}, o = options || {};
+  const name = c.name || 'Client';
+  const prof = c.prof || 'clinic';
+  const city = c.city || '';
+  const lang = o.lang || 'en';
+  const langTxt = lang==='ar' ? 'Arabic (RTL)' : (lang==='fr' ? 'French' : 'English');
+  return `# Project: ${name} — Landing Page Build
+
+## Read FIRST
+- **PROJECT_CONTEXT.md** — all real client data, prompts and options
+- **PROJECT_STATUS.md** — progress checklist
+
+## Stack
+Single self-contained \`index.html\` (inline CSS + JS inside one file). No frameworks, no build step, no external dependencies beyond Google Fonts \`<link>\` (Tajawal for Arabic, Inter otherwise) and the Google Maps embed iframe.
+
+## Design spec
+- **Language:** ${langTxt}${lang==='ar'?' (dir="rtl")':''}
+- **Tone:** ${o.tone||'trust'}
+- **Variant:** ${o.variant||'conservative'}
+- **CTA:** ${o.cta||'whatsapp'}
+
+## Rules
+1. NEVER invent facts — use only data from PROJECT_CONTEXT.md.
+2. Keep the map embed iframe + directions link + CTA links intact.
+3. Small surgical edits; explain your plan in 3\u20135 lines before editing.
+4. Mobile-first, WCAG AA, semantic HTML, local SEO for "${prof} ${city}".
+5. Preserve existing section order.
+6. After each session: update PROJECT_STATUS.md checklist + git commit.
+
+## Definition of done
+Responsive + accessible (a11y) + local SEO + all data accurate + PROJECT_STATUS.md updated.
+`;
+}
+
+function buildPackContext(client, options, lastPrompts){
+  const c = client || {}, o = options || {}, lp = lastPrompts || {};
+  const name = c.name || 'Client';
+  const prof = c.prof || '';
+  const city = c.city || '';
+  const map = packMapData(c);
+  const comps = c.competitors || [];
+  const gap = c.gapAnalysis || null;
+  const lines = [];
+  lines.push(`# PROJECT_CONTEXT — ${name}`);
+  lines.push('');
+  lines.push('All data below is REAL, extracted from the client\'s Google Maps listing. Use ONLY this data in the landing page. Do not invent anything.');
+  lines.push('');
+  lines.push('## Client Data');
+  lines.push('');
+  lines.push(`| Field | Value |`);
+  lines.push(`|---|---|`);
+  lines.push(`| Name | ${String(c.name||'').replace(/\|/g,'\\|')} |`);
+  lines.push(`| Profession | ${String(c.prof||'').replace(/\|/g,'\\|')} |`);
+  lines.push(`| City | ${String(c.city||'').replace(/\|/g,'\\|')} |`);
+  lines.push(`| Address | ${String(c.address||'').replace(/\|/g,'\\|')} |`);
+  lines.push(`| Phone / WhatsApp | ${String(c.phone||'').replace(/\|/g,'\\|')} |`);
+  lines.push(`| Rating | ${String(c.rating||'').replace(/\|/g,'\\|')} \u2b50 |`);
+  lines.push(`| Reviews | ${String(c.reviews||'').replace(/\|/g,'\\|')} |`);
+  lines.push(`| Website | ${String(c.website_url||c.website||'none').replace(/\|/g,'\\|')} |`);
+  lines.push(`| Working hours | ${String(c.hours||'').replace(/\|/g,'\\|')} |`);
+  lines.push('');
+  lines.push(`**Selected USP:** ${c.selectedUSP || ''}`);
+  lines.push('');
+  if (c.insights && ((c.insights.strengths||[]).length || (c.insights.concerns||[]).length || (c.insights.keywords||[]).length)) {
+    lines.push('## Patient Insights');
+    lines.push('');
+    if ((c.insights.strengths||[]).length) lines.push('### Strengths', ...(c.insights.strengths.map(s=>'- '+s)));
+    if ((c.insights.concerns||[]).length)  lines.push('### Concerns',  ...(c.insights.concerns.map(s=>'- '+s)));
+    if ((c.insights.keywords||[]).length)  lines.push('### SEO keywords', ...(c.insights.keywords.map(s=>'- '+s)));
+    lines.push('');
+  }
+  if (comps.length) {
+    lines.push('## Competitors');
+    lines.push('');
+    lines.push('| Competitor | Rating | Reviews | Website |');
+    lines.push('|---|---|---|---|');
+    comps.forEach(x=>lines.push(`| ${String(x.name||'').replace(/\|/g,'\\|')} | ${String(x.rating!=null?x.rating:'').replace(/\|/g,'\\|')} | ${String(x.reviews!=null?x.reviews:'').replace(/\|/g,'\\|')} | ${x.website?String(x.website).replace(/\|/g,'\\|'):'no'} |`));
+    lines.push('');
+  }
+  if (gap) {
+    lines.push('## Gap Analysis');
+    lines.push('');
+    if ((gap.strengths||[]).length) lines.push('### Where we win', ...(gap.strengths.map(s=>'- '+s)));
+    if ((gap.gaps||[]).length)      lines.push('### Where competitors win', ...(gap.gaps.map(s=>'- '+s)));
+    if ((gap.opportunities||[]).length) lines.push('### Opportunities', ...(gap.opportunities.map(s=>'- '+s)));
+    lines.push('');
+  }
+  lines.push('## Location');
+  lines.push('');
+  lines.push(`- Google Maps link: ${map.mapLink}`);
+  lines.push(`- Coordinates: ${(c.lat!=null&&c.lng!=null)?(c.lat+','+c.lng):'(derive from address)'}`);
+  lines.push(`- Map embed src: ${map.embedSrc}`);
+  lines.push(`- Directions link: ${map.dirsLink}`);
+  lines.push('');
+  lines.push('## Generation Options');
+  lines.push('');
+  lines.push(`- Page language: ${o.lang||'en'}`);
+  lines.push(`- Visual tone: ${o.tone||'trust'}`);
+  lines.push(`- Design variant: ${o.variant||'conservative'}`);
+  lines.push(`- CTA goal: ${o.cta||'whatsapp'}`);
+  lines.push(`- Outreach message language: ${o.outreachLang||'en'}`);
+  lines.push('');
+  lines.push('## Prompts');
+  lines.push('');
+  lines.push('### Landing Page Prompt');
+  lines.push('```', lp.landing || '(not generated)', '```');
+  lines.push('');
+  lines.push('### Visual Identity Prompt');
+  lines.push('```', lp.identity || '(not generated)', '```');
+  lines.push('');
+  lines.push('### Image Prompts');
+  lines.push('```', lp.images || '(not generated)', '```');
+  lines.push('');
+  lines.push('### Outreach Message');
+  lines.push('```', lp.outreach || '(not generated)', '```');
+  lines.push('');
+  return lines.join('\n');
+}
+
+function buildPackStatus(client){
+  const c = client || {};
+  return `# PROJECT_STATUS
+## ${c.name || 'Client'} — ${c.prof || ''} ${c.city?('— '+c.city):''}
+
+- [x] Data extracted
+- [x] Prompts generated
+- [x] Skeleton created
+- [ ] Visual design pass
+- [ ] Responsive + a11y check
+- [ ] Local preview tested
+- [ ] Deployed
+- [ ] Outreach sent
+
+## Session log
+_(add notes per session here)_
+
+## Next action
+Run the handoff prompt in your AI agent (or open this folder in OpenCode/Cursor/Claude Code).
+`;
+}
+
+const PACK_FILES = {
+  index:   ['index.html',           'buildPackIndex'],
+  agents:  ['AGENTS.md',            'buildPackAgents'],
+  context: ['PROJECT_CONTEXT.md',   'buildPackContext'],
+  status:  ['PROJECT_STATUS.md',    'buildPackStatus']
+};
+function dlPack(key){
+  const f = PACK_FILES[key]; if(!f) return;
+  const text = (f[1]==='buildPackIndex'||f[1]==='buildPackAgents')
+    ? window[f[1]](client, options)
+    : (f[1]==='buildPackStatus' ? window[f[1]](client) : window[f[1]](client, options, lastPrompts));
+  dl(f[0], text);
+  toast('⬇ ' + f[0] + ' downloaded');
+}
+function dlPackAll(){
+  let i = 0; const keys = Object.keys(PACK_FILES);
+  const step = () => { if (i >= keys.length) { toast('📦 Project pack downloaded (4 files)'); return; } dlPack(keys[i]); i++; setTimeout(step, 300); };
+  step();
+}
+function copyHandoff(){
+  const t = 'Read AGENTS.md, PROJECT_CONTEXT.md and PROJECT_STATUS.md completely. Then build/complete index.html into a production-ready landing page following the design spec and rules in AGENTS.md. Keep ALL exact client data, the map embed and CTA links intact. When done, update PROJECT_STATUS.md and commit.';
+  navigator.clipboard.writeText(t).then(()=>toast('⧉ Handoff prompt copied'));
 }
 
 try{document.getElementById('yearNow').textContent=new Date().getFullYear();}catch(e){}

@@ -89,6 +89,7 @@
 - **Copy for Claude** — ينسخ البرومبت ويفتح [claude.ai](https://claude.ai)
 - **Open in AI Studio** — ينسخ البرومبت ويفتح [aistudio.google.com](https://aistudio.google.com)
 - **Export full client report** — ملف Markdown واحد يجمع البيانات المستخرجة + الخيارات + البرومبتات الثلاثة
+- **📦 Project Pack** — ينزّل مجلدًا جاهزًا (AGENTS.md + PROJECT_CONTEXT.md + PROJECT_STATUS.md + index.html مولّد) تُفتح ملفاته في OpenCode/Cursor/Claude Code لبناء صفحة الهبوط كاملة
 
 ### 💾 إدارة البيانات
 - ✅ حفظ جميع العملاء في History محلي (localStorage: `op_history_v1`) — لم يتغير شكل البيانات إطلاقًا
