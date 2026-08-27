@@ -303,14 +303,14 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     </div>
     <div id="packCard" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
       <label style="color:#a78bfa; font-weight:600">📦 Project Pack — ready-to-build client folder</label>
-      <p class="sub" style="font-size:12px">Download the 4 files into one folder, then open it in OpenCode/Cursor/Claude Code.</p>
+      <p class="sub" style="font-size:12px">Download the 5 files into one folder, then open it in OpenCode/Cursor/Claude Code.</p>
       <div class="row">
-        <button class="btn ghost small" onclick="dlPack('index')">index.html</button>
-        <button class="btn ghost small" onclick="dlPack('agents')">AGENTS.md</button>
-        <button class="btn ghost small" onclick="dlPack('context')">PROJECT_CONTEXT.md</button>
-        <button class="btn ghost small" onclick="dlPack('status')">PROJECT_STATUS.md</button>
-        <button class="btn small" onclick="dlPackAll()">⬇ Download all (4 files)</button>
-        <button class="btn ghost small" onclick="copyHandoff()">⧉ Copy handoff prompt</button>
+        <button class="btn ghost small" onclick="dlPack('index')">⬇ index.html</button>
+        <button class="btn ghost small" onclick="dlPack('agents')">⬇ AGENTS.md</button>
+        <button class="btn ghost small" onclick="dlPack('context')">⬇ PROJECT_CONTEXT.md</button>
+        <button class="btn ghost small" onclick="dlPack('status')">⬇ PROJECT_STATUS.md</button>
+        <button class="btn small" onclick="dlPackAll()">⬇ Download all (5 files)</button>
+        <button class="btn ghost small" onclick="copyHandoff()">⬇ HANDOFF.md</button>
       </div>
     </div>
   </section>
@@ -2497,11 +2497,16 @@ Run the handoff prompt in your AI agent (or open this folder in OpenCode/Cursor/
 `;
 }
 
+function buildPackHandoff(){
+  return 'Read AGENTS.md, PROJECT_CONTEXT.md and PROJECT_STATUS.md completely. Then build/complete index.html into a production-ready landing page following the design spec and rules in AGENTS.md. Keep ALL exact client data, the map embed and CTA links intact. When done, update PROJECT_STATUS.md and commit.';
+}
+
 const PACK_FILES = {
   index:   ['index.html',           'buildPackIndex'],
   agents:  ['AGENTS.md',            'buildPackAgents'],
   context: ['PROJECT_CONTEXT.md',   'buildPackContext'],
-  status:  ['PROJECT_STATUS.md',    'buildPackStatus']
+  status:  ['PROJECT_STATUS.md',    'buildPackStatus'],
+  handoff: ['HANDOFF.md',            'buildPackHandoff']
 };
 function dlPack(key){
   const f = PACK_FILES[key]; if(!f) return;
@@ -2513,12 +2518,14 @@ function dlPack(key){
 }
 function dlPackAll(){
   let i = 0; const keys = Object.keys(PACK_FILES);
-  const step = () => { if (i >= keys.length) { toast('📦 Project pack downloaded (4 files)'); return; } dlPack(keys[i]); i++; setTimeout(step, 300); };
+  const step = () => { if (i >= keys.length) { toast('📦 Project pack downloaded (5 files)'); return; } dlPack(keys[i]); i++; setTimeout(step, 300); };
   step();
 }
 function copyHandoff(){
-  const t = 'Read AGENTS.md, PROJECT_CONTEXT.md and PROJECT_STATUS.md completely. Then build/complete index.html into a production-ready landing page following the design spec and rules in AGENTS.md. Keep ALL exact client data, the map embed and CTA links intact. When done, update PROJECT_STATUS.md and commit.';
-  navigator.clipboard.writeText(t).then(()=>toast('⧉ Handoff prompt copied'));
+  const t = buildPackHandoff();
+  dl('HANDOFF.md', t + '\n');
+  navigator.clipboard.writeText(t).catch(()=>{});
+  toast('⬇ HANDOFF.md downloaded');
 }
 
 try{document.getElementById('yearNow').textContent=new Date().getFullYear();}catch(e){}
