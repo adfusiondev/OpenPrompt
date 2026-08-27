@@ -215,6 +215,21 @@ open index.html        # Mac (وفي ويندوز: start index.html)
 - [x] ~~بروكسي خلفي آمن للمفاتيح~~ — تم (server.js + /api/*)
 - [ ] نشر البروكسي على سيرفر عام + قاعدة بيانات لمشاركة الفريق
 
+## 🖥️ Desktop build (macOS)
+
+Same index.html wrapped as a native macOS app via Electron:
+
+```bash
+# node -v          (if missing: brew install node)
+cd desktop && npm install
+npm start        → run for testing
+npm run dist     → builds OpenPrompt .dmg in desktop/dist/
+```
+
+- External links (WhatsApp, Claude, etc.) open in your default browser
+- localStorage persists between sessions automatically
+- No modifications to the web app — the desktop wrapper is additive only
+
 ## 🏢 Brand & Contact
 
 Built & maintained by **AdsFusion**

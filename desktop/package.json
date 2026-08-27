@@ -1,0 +1,23 @@
+{
+  "name": "openprompt-desktop",
+  "productName": "OpenPrompt",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prebuild": "node -e \"require('fs').copyFileSync('../index.html','index.html')\"",
+    "dist": "npm run prebuild && electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.adsfusion.openprompt",
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.business"
+    },
+    "files": ["main.js", "index.html"]
+  }
+}

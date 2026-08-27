@@ -31,6 +31,7 @@
 | 11 | Session lock (Settings-managed) | 20 دقيقة | 100% | ✅ |
 | 15 | Diagnostic Error Reporter | 15 دقيقة | 100% | ✅ |
 | 16 | Full Backup & Restore | 15 دقيقة | 100% | ✅ |
+| 17 | macOS Desktop Build (Electron) | 20 دقيقة | 100% | ✅ |
 
 ---
 
