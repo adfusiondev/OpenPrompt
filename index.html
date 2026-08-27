@@ -62,6 +62,7 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--muted)}
 
 pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
   padding:18px; white-space:pre-wrap; line-height:1.9; font-size:14px; max-height:420px; overflow:auto}
+pre.prompt[contenteditable="true"]{outline:none}
 
 .hist-item{border:1px solid var(--border); border-radius:6px; padding:14px 18px; margin-bottom:10px;
   display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; background:#111}
@@ -280,8 +281,9 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="tab" onclick="showTab('outreach',this)">Outreach Message</button>
       <button class="tab" onclick="showTab('images',this)">🎨 Image Prompts</button>
     </div>
-    <pre class="prompt" id="promptOut"></pre>
+    <pre class="prompt" id="promptOut" oninput="lastPrompts[currentTab] = this.innerText"></pre>
     <div class="row">
+      <button class="btn ghost" id="editBtn" onclick="toggleEdit()">✏️ Edit</button>
       <button class="btn" onclick="copyCurrent()">⧉ Copy</button>
       <button class="btn ghost" onclick="openInTool('Claude', 'https://claude.ai/new')">↗ Claude</button>
       <button class="btn ghost" onclick="openInTool('ChatGPT', 'https://chatgpt.com')">↗ ChatGPT</button>
@@ -1753,8 +1755,24 @@ function _generateOrig(){
   toast('✅ Prompts generated');
 }
 
+let editMode = false;
+function setEditMode(on){
+  editMode = on;
+  const out = $('#promptOut');
+  out.contentEditable = on;
+  out.style.borderColor = on ? 'var(--warn)' : 'var(--border)';
+  out.style.cursor = on ? 'text' : 'default';
+  $('#editBtn').textContent = on ? '💾 Done' : '✏️ Edit';
+  if (on) out.focus();
+}
+function toggleEdit(){
+  setEditMode(!editMode);
+  toast(editMode ? 'Edit mode ON — changes save live' : 'Edit mode OFF');
+}
+
 function showTab(key, el){
   currentTab=key;
+  setEditMode(false);
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
   $('#promptOut').textContent=lastPrompts[key]||'';
