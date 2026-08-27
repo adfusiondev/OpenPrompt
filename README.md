@@ -150,6 +150,7 @@
 - **🔐 Access Lock** (optional): session-based password lock managed from Settings
 - **Clean History**: explicit Save/Discard at Results + Back navigation
 - **🐞 Diagnostic Reporter**: one-click copyable bug report with errors, pipeline log & masked keys — paste to your developer/AI for fast fixes
+- **💾 Backup & Restore**: one-click full backup (history + leads + settings) to JSON; restore on any browser with merge or replace mode
 
 ### 📍 Location Integration (جديد)
 دمج بيانات الموقع في جميع البرومبتات المُولّدة:

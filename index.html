@@ -314,6 +314,9 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn ghost small" onclick="copyLeadsTSV()">⧉ Copy for Google Sheets</button>
       <button class="btn ghost small" onclick="clearLeads()">🗑 Clear leads</button>
       <button class="btn ghost small" onclick="openImportModal()">⬆ Import</button>
+      <button class="btn ghost small" onclick="backupData()">⬇ Full backup</button>
+      <button class="btn ghost small" onclick="$('#restoreFile').click()">⬆ Restore</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" onchange="restoreData(this)" style="display:none">
       <label class="toggle" style="font-size:12px;margin:0;margin-inline-start:8px">
         <input type="checkbox" id="autoLeadsToggle" onchange="localStorage.setItem('op_auto_leads',this.checked)">
         <span class="slider"></span>
@@ -2046,6 +2049,73 @@ function openDiag(){ var el=$('#diagOut'); if(el) el.textContent=buildDiagReport
 function closeDiag(){ $('#diagModal').style.display='none'; }
 function copyDiag(){ var txt=$('#diagOut')?.textContent||''; navigator.clipboard.writeText(txt).then(function(){toast('Report copied');}).catch(function(){toast('Copy failed');}); }
 function clearDiag(){ diag.errors=[]; updateDiagCount(); toast('Errors cleared'); }
+
+function backupData(){
+  var includeKeys=false;
+  if(confirm('Include API keys in backup?\n\nOK = include\nCancel = exclude')){
+    includeKeys=true;
+    if(!confirm('WARNING: API keys will be stored in plain text in the JSON file.\n\nClick OK to proceed, Cancel to abort.')) return;
+  }
+  var settings={};
+  try{ settings=JSON.parse(localStorage.getItem(LS_S)||'{}'); }catch(e){}
+  var backup={version:1, exportedAt:new Date().toISOString(), history:getHist(), leads:getLeads(), settings:{}};
+  if(includeKeys){
+    backup.settings=settings;
+  } else {
+    var safe={};
+    for(var k in settings){
+      if(settings.hasOwnProperty(k)){
+        if(k==='serpapi'||k==='gemini'||k==='jina_key'){
+          safe[k]='';
+        } else {
+          safe[k]=settings[k];
+        }
+      }
+    }
+    backup.settings=safe;
+  }
+  var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  var d=new Date().toISOString().slice(0,10);
+  a.href=URL.createObjectURL(blob);
+  a.download='openprompt-backup-'+d+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('Backup downloaded ('+backup.history.length+' clients, '+backup.leads.length+' leads)');
+}
+function restoreData(input){
+  var file=input.files[0];
+  if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var raw;
+    try{ raw=JSON.parse(e.target.result); }catch(err){ toast('Invalid JSON file'); input.value=''; return; }
+    if(!raw||!raw.version||!Array.isArray(raw.history)){ toast('Invalid backup format — missing version or history'); input.value=''; return; }
+    if(!confirm('Restoring backup from '+raw.exportedAt+'\n\nHistory: '+raw.history.length+' clients\nLeads: '+(raw.leads||[]).length+' leads\n\nOK = MERGE (skip duplicates)\nCancel = REPLACE all')){ input.value=''; return; }
+    var hist=getHist(); var leads=getLeads(); var skippedH=0, skippedL=0;
+    raw.history.forEach(function(item){
+      var exists=hist.some(function(h){ return h.id===item.id; });
+      if(exists) skippedH++; else hist.push(item);
+    });
+    (raw.leads||[]).forEach(function(item){
+      var exists=leads.some(function(l){ return l.name===item.name && l.city===item.city; });
+      if(exists) skippedL++; else leads.push(item);
+    });
+    if(raw.settings){
+      var s={};
+      try{ s=JSON.parse(localStorage.getItem(LS_S)||'{}'); }catch(e){}
+      for(var k in raw.settings){ if(raw.settings.hasOwnProperty(k)) s[k]=raw.settings[k]; }
+      localStorage.setItem(LS_S, JSON.stringify(s));
+    }
+    try{
+      localStorage.setItem(LS_H, JSON.stringify(hist));
+      localStorage.setItem(LS_L, JSON.stringify(leads));
+    }catch(err){ toast('Storage full — clean up before restoring'); input.value=''; return; }
+    renderHistory(); renderLeads();
+    toast('Restored '+(raw.history.length-skippedH)+' clients, '+(raw.leads.length-skippedL)+' leads'+(skippedH||skippedL?' ('+skippedH+' history + '+skippedL+' leads skipped as duplicates)':''));
+    input.value='';
+  };
+  reader.readAsText(file);
+}
 
 function openImportModal(){ $('#importModal').style.display='flex'; }
 function closeImportModal(){ $('#importModal').style.display='none'; $('#importStatus').textContent=''; $('#importFile').value=''; }
