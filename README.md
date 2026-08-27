@@ -219,7 +219,7 @@ open index.html        # Mac (وفي ويندوز: start index.html)
 
 ## 🖥️ Desktop build (macOS)
 
-Same index.html wrapped as a native macOS app via Electron:
+The live web app wrapped as a native macOS app via Electron (desktop = live web app window + offline fallback):
 
 ```bash
 # node -v          (if missing: brew install node)
@@ -230,6 +230,8 @@ npm run dist     → builds OpenPrompt .dmg in desktop/dist/
 
 - External links (WhatsApp, Claude, etc.) open in your default browser
 - localStorage persists between sessions automatically
+- Runs the deployed web app (`open-prompt-three.vercel.app`) — fixes go live in the desktop instantly
+- Offline fallback: loads the bundled local copy shipped in the .dmg
 - No modifications to the web app — the desktop wrapper is additive only
 
 ## 🏢 Brand & Contact

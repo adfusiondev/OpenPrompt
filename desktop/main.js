@@ -19,9 +19,12 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  const local = path.join(__dirname, 'index.html');
-  const root = path.join(__dirname, '..', 'index.html');
-  win.loadFile(fs.existsSync(local) ? local : root);
+  win.loadURL('https://open-prompt-three.vercel.app');
+
+  win.webContents.on('did-fail-load', () => {
+    const f = path.join(__dirname, 'index.html');
+    if (fs.existsSync(f)) win.loadFile(f);
+  });
 }
 
 app.whenReady().then(createWindow);
