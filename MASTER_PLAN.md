@@ -621,6 +621,27 @@ git push origin main --tags
 
 ---
 
+# 12.7 — Clean History (Save/Discard) + Back Navigation
+
+## Goal
+Replace auto-save with explicit Save/Discard. Add Back navigation to s3 and s4.
+
+## Changes
+- sessionGenerated + sessionSaved flags
+- Save client / Discard & close buttons in Results (s3)
+- Back button in s3 (to Options) and s4 (to Results)
+- generate() no longer auto-saves
+- openItem() marks as already-saved
+- newClient() confirms if unsaved generated data exists
+
+## Success Criteria
+- [ ] Generate -> History unchanged (auto-save removed)
+- [ ] Save client -> appears in History; button shows "Saved (update)"
+- [ ] Discard without saving -> back to step 1, History unchanged
+- [ ] Back buttons: s3 -> s2 ; s4 -> s3
+
+---
+
 # 📎 ملحق أ — الأثر المتوقع بعد إتمام P0
 
 | المقياس | قبل | بعد |

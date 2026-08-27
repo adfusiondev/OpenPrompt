@@ -292,12 +292,20 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn ghost" onclick="downloadCurrent()">↓ Export full client report</button>
       <button class="btn ghost" id="aiBtn" onclick="aiImprove()">✨ Improve with AI</button>
       <button class="btn ghost hidden" id="waBtn" onclick="sendWhatsApp()">📲 Send via WhatsApp</button>
-      <button class="btn ghost" onclick="go(0)">+ New client</button>
+      <button class="btn ghost" onclick="newClient()">+ New client</button>
     </div>
     <div class="status" id="aiStatus"></div>
+    <div class="row" style="border-top:1px solid var(--border); margin-top:16px; padding-top:16px">
+      <button class="btn" id="saveClientBtn" onclick="saveClient()">💾 Save client</button>
+      <button class="btn ghost" id="discardBtn" onclick="discardClient()" style="border-color:#5a2020; color:var(--err)">✖ Discard &amp; close</button>
+      <button class="btn ghost" onclick="go(2)">← Back</button>
+    </div>
   </section>
 
   <section id="s4" class="panel hidden">
+    <div class="row" style="margin-top:0;margin-bottom:10px">
+      <button class="btn ghost" onclick="go(3)">← Back</button>
+    </div>
     <h1>Client History</h1>
     <div class="row" style="margin-top:0;margin-bottom:10px;align-items:center;flex-wrap:wrap">
       <div id="leadsToolbar" style="flex:1;min-width:120px"></div>
@@ -414,6 +422,7 @@ const LS_H='op_history_v1', LS_S='op_settings_v1', LS_L='op_leads_v1';
   } catch(e) {}
 })();
 let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
+let sessionGenerated=false, sessionSaved=false;
 const STEPS=['URL','Data','Options','Results','History'];
 const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest'];
 const PROXY_DEFAULT='http://localhost:3000';
@@ -1287,7 +1296,7 @@ function mergeData(existing, newData){
 }
 
 async function _analyzeOrig(){
-  currentId = null;
+  currentId = null; sessionGenerated = false; sessionSaved = false;
   let url = $('#f_url').value.trim();
   if(!url){ toast('Please paste a link first'); return; }
   if(!url.includes('google.com/maps') && !url.includes('goo.gl')){
@@ -1555,7 +1564,7 @@ function renderProspectResults(places){
 }
 
 function useProspect(btn){
-  currentId = null;
+  currentId = null; sessionGenerated = false; sessionSaved = false;
   const p = JSON.parse(btn.getAttribute('data-place'));
   const city = btn.getAttribute('data-city') || '';
 
@@ -1701,7 +1710,8 @@ function _generateOrig(){
   if(!client.name||!client.prof||!client.city){toast('Please complete: name, profession, city'); go(1); return;}
   lastPrompts=buildPrompts();
   showTab('landing', document.querySelector('.tab'));
-  saveOrUpdate();
+  sessionGenerated = true; sessionSaved = false;
+  updateSaveBtn();
   go(3);
   toast('✅ Prompts generated');
 }
@@ -1817,6 +1827,8 @@ function renderHistory(){
 function openItem(id){
   const x=getHist().find(v=>v.id===id); if(!x) return;
   client=x.client; options=x.options; lastPrompts=x.prompts; currentId=id;
+  sessionGenerated = true; sessionSaved = true;
+  updateSaveBtn();
   $('#f_name').value=client.name||''; $('#f_prof').value=client.prof||'';
   $('#f_city').value=client.city||''; $('#f_phone').value=client.phone||'';
   $('#f_rating').value=client.rating||''; $('#f_reviews').value=client.reviews||'';
@@ -1837,6 +1849,10 @@ function delItem(id){
   renderHistory(); toast('🗑 Deleted');
 }
 const aiImprove=lockGate(_aiImproveOrig);
+function updateSaveBtn(){const b=$('#saveClientBtn'); if(!b) return; b.textContent=sessionSaved?'✓ Saved (update)':'💾 Save client';}
+function saveClient(){ saveOrUpdate(); sessionSaved = true; updateSaveBtn(); toast('Client saved to History'); }
+function discardClient(){ if(sessionSaved){ go(0); toast('Closed - client remains in History'); } else { currentId=null; sessionGenerated=false; sessionSaved=false; go(0); toast('Discarded - not saved'); } }
+function newClient(){ if(sessionGenerated && !sessionSaved){ if(!confirm('This client was generated but NOT saved. Discard it?')) return; } currentId=null; sessionGenerated=false; sessionSaved=false; updateSaveBtn(); go(0); }
 function _exportAllOrig(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
 const exportAll=lockGate(_exportAllOrig);
 
