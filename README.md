@@ -146,6 +146,7 @@
 - متوافق مع Midjourney / Flux / DALL-E
 - يُحفظ في History ويُستعاد تلقائيًا
 - **Per-row outreach actions**: 📲 WhatsApp | 📊 +Leads | ⧉ Outreach (from History)
+- **📥 Import Leads**: CSV template → upload → entries tagged "imported" in History
 
 ### 📍 Location Integration (جديد)
 دمج بيانات الموقع في جميع البرومبتات المُولّدة:

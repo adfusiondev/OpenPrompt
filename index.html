@@ -303,6 +303,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn ghost small" onclick="downloadLeadsCSV()">⬇ Download leads.csv</button>
       <button class="btn ghost small" onclick="copyLeadsTSV()">⧉ Copy for Google Sheets</button>
       <button class="btn ghost small" onclick="clearLeads()">🗑 Clear leads</button>
+      <button class="btn ghost small" onclick="openImportModal()">⬆ Import</button>
       <label class="toggle" style="font-size:12px;margin:0;margin-inline-start:8px">
         <input type="checkbox" id="autoLeadsToggle" onchange="localStorage.setItem('op_auto_leads',this.checked)">
         <span class="slider"></span>
@@ -348,6 +349,22 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
       <button class="btn" onclick="saveSettings()">💾 Save settings</button>
       <button class="btn ghost" onclick="clearAllKeys()">↺ Reset URL</button>
       <button class="btn ghost" onclick="closeSettings()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="importModal" style="position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:90;padding:20px">
+  <div class="panel" style="max-width:480px;width:100%">
+    <h1 style="font-size:18px">⬆ Import Leads</h1>
+    <p class="sub">Bring external leads (ads, other tools) into History.</p>
+    <div class="row" style="margin-top:0">
+      <button class="btn ghost" onclick="downloadTemplate()">1️⃣ Download template (.csv)</button>
+    </div>
+    <label style="margin-top:10px">2️⃣ Upload the filled file (.csv)</label>
+    <input type="file" id="importFile" accept=".csv,text/csv" onchange="importLeads(this)">
+    <div id="importStatus" class="status"></div>
+    <div class="row">
+      <button class="btn ghost" onclick="closeImportModal()">Close</button>
     </div>
   </div>
 </div>
@@ -1744,7 +1761,7 @@ function renderHistory(){
   $('#histList').innerHTML = h.length ? h.map(x=>`
     <div class="hist-item">
       <div class="info"><b>${x.client.name}</b>
-        <span>${x.client.prof} • ${x.client.city} • ${x.ts}${x.client.source==='prospected'?' • <span style="color:var(--ok)">🎯 Prospected</span>':''}</span></div>
+        <span>${x.client.prof} • ${x.client.city} • ${x.ts}${x.client.source==='prospected'?' • <span style="color:var(--ok)">🎯 Prospected</span>':x.client.source==='imported'?' • <span style="color:var(--info)">📥 Imported</span>':''}</span></div>
       <div class="row" style="margin:0;flex-wrap:wrap;gap:4px">
         <button class="btn small" onclick="openItem(${x.id})">Open</button>
         ${x.client.phone ? `<button class="btn ghost small" onclick="openWhatsApp('${(x.client.phone||'').replace(/'/g,"\\'")}','${(x.prompts?.outreach||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n')}')" title="Send via WhatsApp">📲</button>` : ''}
@@ -1885,6 +1902,55 @@ function normalizePhone(phone){
   return d;
 }
 function sendWhatsApp(){ openWhatsApp(client.phone, lastPrompts.outreach); }
+
+function openImportModal(){ $('#importModal').style.display='flex'; }
+function closeImportModal(){ $('#importModal').style.display='none'; $('#importStatus').textContent=''; $('#importFile').value=''; }
+function downloadTemplate(){
+  const h='Name,Profession,City,Phone,Rating,Reviews,Website URL,Address,Hours,Notes';
+  const r1='"Al Fardan Dental","Dentist","Riyadh","+966501234567","4.8","320","https://fardan-dental.com","King Fahd Rd, Riyadh","09:00-21:00","Premium implant clinic"';
+  const r2='"Glow Beauty Spa","Beauty Salon","Dubai","+971509876543","4.6","180","https://glowspa.ae","Jumeirah Beach Rd, Dubai","10:00-22:00","Full-service beauty & nails"';
+  dl('openprompt-leads-template.csv','\uFEFF'+h+'\n'+r1+'\n'+r2);
+  toast('Template downloaded — fill in Excel/Sheets then upload');
+}
+function parseCSV(text){
+  const rows=[]; let row=[]; let cell=''; let inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){ if(c==='"'&&text[i+1]==='"'){cell+='"';i++;} else if(c==='"'){inQ=false;} else{cell+=c;} }
+    else{ if(c==='"'){inQ=true;} else if(c===','){row.push(cell);cell='';} else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n')i++; rows.push(row); row=[]; cell=''; } else{cell+=c;} }
+  }
+  row.push(cell); if(row.length&&row.some(c=>c.trim())) rows.push(row);
+  return rows;
+}
+function importLeads(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    let text=e.target.result.replace(/^\uFEFF/,'');
+    const rows=parseCSV(text);
+    if(rows.length<2){ $('#importStatus').textContent='⚠ File is empty or has no data rows'; return; }
+    const header=rows[0].map(h=>h.trim().toLowerCase());
+    const nameIdx=header.indexOf('name');
+    if(nameIdx<0){ $('#importStatus').textContent='⚠ Missing "Name" column in header'; return; }
+    const colMap={name:nameIdx,prof:header.indexOf('profession'),city:header.indexOf('city'),phone:header.indexOf('phone'),rating:header.indexOf('rating'),reviews:header.indexOf('reviews'),website_url:header.indexOf('website url'),address:header.indexOf('address'),hours:header.indexOf('hours'),notes:header.indexOf('notes')};
+    const hist=getHist(); let imported=0, skipped=0;
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i]; if(!r||!r[nameIdx]?.trim()) { skipped++; continue; }
+      const get=k=>{ const idx=colMap[k]; return idx>=0&&idx<r.length ? r[idx].trim() : ''; };
+      const name=get('name'), city=get('city');
+      if(hist.some(h=>h.client.name===name && h.client.city===city)){ skipped++; continue; }
+      const ts=new Date().toISOString().replace('T',' ').slice(0,16);
+      hist.unshift({ id:Date.now()+i, ts, client:{name,prof:get('prof'),city,phone:get('phone'),rating:get('rating'),reviews:get('reviews'),website_url:get('website_url'),website:get('website_url')?'yes':'no',address:get('address'),hours:get('hours'),notes:get('notes'),source:'imported'}, options:{lang:'en',cta:'whatsapp',tone:'trust'}, prompts:{} });
+      imported++;
+    }
+    try{ localStorage.setItem(LS_H, JSON.stringify(hist)); } catch(e){ toast('Storage full'); return; }
+    renderHistory();
+    const msg='✅ Imported '+imported+' lead'+(imported!==1?'s':'')+' ('+skipped+' skipped: duplicates/invalid)';
+    $('#importStatus').textContent=msg; toast(msg);
+    input.value='';
+  };
+  reader.readAsText(file);
+}
 
 go(0);
 </script>
