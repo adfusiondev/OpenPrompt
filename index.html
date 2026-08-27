@@ -413,6 +413,19 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
   </div>
 </div>
 
+<div id="diagModal" style="position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:95;padding:20px" onclick="if(event.target===this)closeDiag()">
+  <div class="panel" style="max-width:640px;width:100%">
+    <h1 style="font-size:18px">🐞 Diagnostic Report</h1>
+    <p class="sub">Copy this report and send it for support. API keys are masked automatically.</p>
+    <pre id="diagOut" class="prompt" style="max-height:300px;overflow:auto"></pre>
+    <div class="row">
+      <button class="btn" onclick="copyDiag()">⧉ Copy report</button>
+      <button class="btn ghost" onclick="clearDiag()">🗑 Clear errors</button>
+      <button class="btn ghost" onclick="closeDiag()">Close</button>
+    </div>
+  </div>
+</div>
+<button id="diagBtn" onclick="openDiag()" title="Diagnostic report" style="position:fixed;bottom:24px;left:24px;z-index:80;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 14px;cursor:pointer;font-size:13px">🐞 Report <span id="diagCount" style="color:var(--err)"></span></button>
 <div id="toast"></div>
 
 <script>
@@ -429,6 +442,10 @@ const LS_H='op_history_v1', LS_S='op_settings_v1', LS_L='op_leads_v1';
 })();
 let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
 let sessionGenerated=false, sessionSaved=false;
+const diag={errors:[],startedAt:new Date().toISOString()};
+window.addEventListener('error',e=>{diag.errors.push({t:new Date().toLocaleTimeString(),msg:e.message,src:(e.filename||'').split('/').pop(),line:e.lineno,col:e.colno});if(diag.errors.length>10)diag.errors.shift();updateDiagCount();});
+window.addEventListener('unhandledrejection',e=>{diag.errors.push({t:new Date().toLocaleTimeString(),msg:'Unhandled promise: '+(e.reason?.message||e.reason),src:'async',line:null});if(diag.errors.length>10)diag.errors.shift();updateDiagCount();});
+function updateDiagCount(){var el=$('#diagCount');if(el){var n=diag.errors.length;el.textContent=n?'('+n+')':'';}}
 const STEPS=['URL','Data','Options','Results','History'];
 const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest'];
 const PROXY_DEFAULT='http://localhost:3000';
@@ -1992,6 +2009,43 @@ function normalizePhone(phone){
   return d;
 }
 function sendWhatsApp(){ openWhatsApp(client.phone, lastPrompts.outreach); }
+
+function maskKey(k){ return k ? k.slice(0,4)+'••••'+k.slice(-4) : 'not set'; }
+function buildDiagReport(){
+  var s=getLeads().length, h=getHist().length;
+  var keys={};
+  try{keys=JSON.parse(localStorage.getItem(LS_S)||'{}');}catch(e){}
+  var activeSection='unknown';
+  document.querySelectorAll('section').forEach(function(sec){ if(!sec.classList.contains('hidden')) activeSection=sec.id; });
+  var logEl=$('#log'), logText=logEl?logEl.innerText.trim():'';
+  var urlInput=$('#f_url');
+  var lines=[
+    '--- OpenPrompt Diagnostic Report ---',
+    'App version: live (v9-diag)',
+    'URL: '+location.href,
+    'User-Agent: '+navigator.userAgent,
+    'Time: '+new Date().toISOString(),
+    'Storage: '+(function(){try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return 'YES';}catch(e){return 'NO';}})(),
+    'Settings: SerpAPI='+(keys.serpapi?maskKey(keys.serpapi):'not set')+', Gemini='+(keys.gemini?maskKey(keys.gemini):'not set')+', Jina='+(keys.jina===false?'off':'on')+', Lock='+(localStorage.getItem(LOCK_KEYS.enabled)==='true'?'on':'off'),
+    'Last URL input: '+(urlInput?urlInput.value.slice(0,80):'n/a'),
+    'Current step: '+activeSection,
+    'History entries: '+h+' | Leads: '+s,
+    '',
+    '--- Captured errors ('+diag.errors.length+') ---',
+  ];
+  if(diag.errors.length){ diag.errors.forEach(function(e,i){ lines.push((i+1)+'. '+e.t+' | '+e.msg+' | '+(e.src||'')+':'+(e.line||'?')); }); }
+  else{ lines.push('none'); }
+  lines.push('');
+  lines.push('--- Pipeline log (last 40 lines) ---');
+  if(logText){ var ll=logText.split('\n'); lines.push(ll.slice(-40).join('\n')); }
+  else{ lines.push('(empty)'); }
+  lines.push('------------------------------------');
+  return lines.join('\n');
+}
+function openDiag(){ var el=$('#diagOut'); if(el) el.textContent=buildDiagReport(); $('#diagModal').style.display='flex'; }
+function closeDiag(){ $('#diagModal').style.display='none'; }
+function copyDiag(){ var txt=$('#diagOut')?.textContent||''; navigator.clipboard.writeText(txt).then(function(){toast('Report copied');}).catch(function(){toast('Copy failed');}); }
+function clearDiag(){ diag.errors=[]; updateDiagCount(); toast('Errors cleared'); }
 
 function openImportModal(){ $('#importModal').style.display='flex'; }
 function closeImportModal(){ $('#importModal').style.display='none'; $('#importStatus').textContent=''; $('#importFile').value=''; }

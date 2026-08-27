@@ -24,6 +24,12 @@
 | 7.6 | Outreach Richness Guarantee + Arabic Typo Fix | 15 دقيقة | 100% | ✅ |
 | 8 | Unified Mode Switcher (Extract ⇄ Prospector) | 15 دقيقة | 100% | ✅ |
 | 9 | Image Prompts Generator (Midjourney/Flux/DALL-E) | 30 دقيقة | 100% | ✅ |
+| 10–13 | History + Leads + WhatsApp + Import | 30–45 دقيقة | 100% | ✅ |
+| 12.5 | History-centric outreach actions | 15 دقيقة | 100% | ✅ |
+| 12.6 | Import Leads CSV | 10 دقيقة | 100% | ✅ |
+| 12.7 | Clean History workflow + Back nav | 15 دقيقة | 100% | ✅ |
+| 11 | Session lock (Settings-managed) | 20 دقيقة | 100% | ✅ |
+| 15 | Diagnostic Error Reporter | 15 دقيقة | 100% | ✅ |
 
 ---
 

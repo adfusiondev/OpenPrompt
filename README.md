@@ -149,6 +149,7 @@
 - **📥 Import Leads**: CSV template → upload → entries tagged "imported" in History
 - **🔐 Access Lock** (optional): session-based password lock managed from Settings
 - **Clean History**: explicit Save/Discard at Results + Back navigation
+- **🐞 Diagnostic Reporter**: one-click copyable bug report with errors, pipeline log & masked keys — paste to your developer/AI for fast fixes
 
 ### 📍 Location Integration (جديد)
 دمج بيانات الموقع في جميع البرومبتات المُولّدة:
@@ -207,7 +208,7 @@ open index.html        # Mac (وفي ويندوز: start index.html)
 
 - [ ] استخراج الصور من Google Maps (logo + photos) لبرومبت الهوية البصرية
 - [ ] تصدير PDF مع branding
-- [ ] Import clients from CSV
+- [x] ~~Import clients from CSV~~ — done (v7.6)
 - [ ] Multi-language UI (واجهة عربية / فرنسية)
 - [ ] Chrome Extension لتوليد برومبت بنقرة من Maps مباشرة
 - [x] ~~بروكسي خلفي آمن للمفاتيح~~ — تم (server.js + /api/*)
