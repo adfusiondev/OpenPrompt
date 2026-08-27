@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="author" content="AdsFusion">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenPrompt — Landing Page Prompt Generator</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
@@ -326,6 +327,11 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <div id="histList"></div>
   </section>
 </main>
+
+<footer style="max-width:960px; margin:0 auto; padding:24px 20px 40px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; color:var(--muted); font-size:13px">
+  <div>© <span id="yearNow">2026</span> <b style="color:var(--text)">AdsFusion</b> — All rights reserved</div>
+  <a href="https://wa.me/212669350062?text=Hello%20AdsFusion!%20I%27d%20like%20to%20know%20more%20about%20OpenPrompt." target="_blank" rel="noopener" style="color:var(--ok); text-decoration:none; font-weight:600">📲 Contact us via WhatsApp: +212 669-350062</a>
+</footer>
 
 <div id="overlay">
   <div class="panel">
@@ -2035,6 +2041,7 @@ function importLeads(input){
   reader.readAsText(file);
 }
 
+try{document.getElementById('yearNow').textContent=new Date().getFullYear();}catch(e){}
 go(0);
 </script>
 </body>

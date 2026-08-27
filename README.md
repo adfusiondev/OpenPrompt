@@ -213,6 +213,12 @@ open index.html        # Mac (وفي ويندوز: start index.html)
 - [x] ~~بروكسي خلفي آمن للمفاتيح~~ — تم (server.js + /api/*)
 - [ ] نشر البروكسي على سيرفر عام + قاعدة بيانات لمشاركة الفريق
 
+## 🏢 Brand & Contact
+
+Built & maintained by **AdsFusion**
+
+- 📲 WhatsApp: [+212 669-350062](https://wa.me/212669350062?text=Hello%20AdsFusion!%20I%27d%20like%20to%20know%20more%20about%20OpenPrompt.)
+
 ## 📄 License
 
 MIT — انظر [LICENSE](LICENSE).
