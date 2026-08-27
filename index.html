@@ -329,7 +329,7 @@ pre.prompt[contenteditable="true"]{outline:none}
       <button class="btn ghost small" onclick="clearLeads()">🗑 Clear leads</button>
       <button class="btn ghost small" onclick="openImportModal()">⬆ Import</button>
       <button class="btn ghost small" onclick="backupData()">⬇ Full backup</button>
-      <button class="btn ghost small" onclick="$('#restoreFile').click()">⬆ Restore</button>
+      <button class="btn ghost small" onclick="$('#restoreFile').click()">⬆ Restore backup</button>
       <input type="file" id="restoreFile" accept=".json,application/json" onchange="restoreData(this)" style="display:none">
       <label class="toggle" style="font-size:12px;margin:0;margin-inline-start:8px">
         <input type="checkbox" id="autoLeadsToggle" onchange="localStorage.setItem('op_auto_leads',this.checked)">
@@ -2088,7 +2088,7 @@ function backupData(){
   }
   var settings={};
   try{ settings=JSON.parse(localStorage.getItem(LS_S)||'{}'); }catch(e){}
-  var backup={version:1, exportedAt:new Date().toISOString(), history:getHist(), leads:getLeads(), settings:{}};
+  var backup={app:'OpenPrompt', version:2, exportedAt:new Date().toISOString(), history:getHist(), leads:getLeads(), settings:{}};
   if(includeKeys){
     backup.settings=settings;
   } else {
@@ -2119,29 +2119,30 @@ function restoreData(input){
   reader.onload=function(e){
     var raw;
     try{ raw=JSON.parse(e.target.result); }catch(err){ toast('Invalid JSON file'); input.value=''; return; }
-    if(!raw||!raw.version||!Array.isArray(raw.history)){ toast('Invalid backup format — missing version or history'); input.value=''; return; }
-    if(!confirm('Restoring backup from '+raw.exportedAt+'\n\nHistory: '+raw.history.length+' clients\nLeads: '+(raw.leads||[]).length+' leads\n\nOK = MERGE (skip duplicates)\nCancel = REPLACE all')){ input.value=''; return; }
-    var hist=getHist(); var leads=getLeads(); var skippedH=0, skippedL=0;
-    raw.history.forEach(function(item){
-      var exists=hist.some(function(h){ return h.id===item.id; });
-      if(exists) skippedH++; else hist.push(item);
-    });
-    (raw.leads||[]).forEach(function(item){
-      var exists=leads.some(function(l){ return l.name===item.name && l.city===item.city; });
-      if(exists) skippedL++; else leads.push(item);
-    });
-    if(raw.settings){
-      var s={};
-      try{ s=JSON.parse(localStorage.getItem(LS_S)||'{}'); }catch(e){}
-      for(var k in raw.settings){ if(raw.settings.hasOwnProperty(k)) s[k]=raw.settings[k]; }
-      localStorage.setItem(LS_S, JSON.stringify(s));
+    if(!raw||!Array.isArray(raw.history)||(raw.app!=='OpenPrompt'&&!raw.version)){ toast('Invalid backup file — not an OpenPrompt backup'); input.value=''; return; }
+    var merge=confirm('Restoring backup from '+raw.exportedAt+'\n\nHistory: '+raw.history.length+' clients\nLeads: '+(raw.leads||[]).length+' leads\n\nOK = MERGE (skip duplicates)\nCancel = REPLACE all');
+    var skippedH=0, skippedL=0, newHist, newLeads;
+    if(merge){
+      var hist=getHist(); var leads=getLeads();
+      raw.history.forEach(function(item){
+        var exists=hist.some(function(h){ return h.id===item.id; });
+        if(exists) skippedH++; else hist.push(item);
+      });
+      (raw.leads||[]).forEach(function(item){
+        var exists=leads.some(function(l){ return l.name===item.name && l.city===item.city; });
+        if(exists) skippedL++; else leads.push(item);
+      });
+      newHist=hist; newLeads=leads;
+    } else {
+      newHist=raw.history.slice(); newLeads=(raw.leads||[]).slice();
     }
     try{
-      localStorage.setItem(LS_H, JSON.stringify(hist));
-      localStorage.setItem(LS_L, JSON.stringify(leads));
+      localStorage.setItem(LS_H, JSON.stringify(newHist));
+      localStorage.setItem(LS_L, JSON.stringify(newLeads));
+      if(!merge && raw.settings) localStorage.setItem(LS_S, JSON.stringify(raw.settings));
     }catch(err){ toast('Storage full — clean up before restoring'); input.value=''; return; }
     renderHistory(); renderLeads();
-    toast('Restored '+(raw.history.length-skippedH)+' clients, '+(raw.leads.length-skippedL)+' leads'+(skippedH||skippedL?' ('+skippedH+' history + '+skippedL+' leads skipped as duplicates)':''));
+    toast('Restored '+(raw.history.length-skippedH)+' clients, '+(raw.leads.length-skippedL)+' leads'+(merge&&(skippedH||skippedL)?' ('+skippedH+' history + '+skippedL+' leads skipped as duplicates)':''));
     input.value='';
   };
   reader.readAsText(file);
