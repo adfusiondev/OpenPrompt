@@ -1970,6 +1970,7 @@ function addLeadFromClient(c){
   try { localStorage.setItem(LS_L, JSON.stringify(leads)); }
   catch(e){ toast('Storage full — export your data and clean History'); return; }
   toast('Added to leads ('+leads.length+' total)');
+  renderLeads();
 }
 function openWhatsApp(phone, message){
   const digits=normalizePhone(phone||'');
