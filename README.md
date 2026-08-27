@@ -147,6 +147,7 @@
 - يُحفظ في History ويُستعاد تلقائيًا
 - **Per-row outreach actions**: 📲 WhatsApp | 📊 +Leads | ⧉ Outreach (from History)
 - **📥 Import Leads**: CSV template → upload → entries tagged "imported" in History
+- **🔐 Access Lock** (optional): session-based password lock managed from Settings
 
 ### 📍 Location Integration (جديد)
 دمج بيانات الموقع في جميع البرومبتات المُولّدة:

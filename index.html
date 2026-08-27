@@ -124,6 +124,7 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
 .seg button:hover:not(.active){color:var(--text)}
 .mode-row{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
 .mode-btn.active{background:var(--ok);border-color:var(--ok);color:#0a0a09;font-weight:700}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 </style>
 </head>
 <body>
@@ -337,7 +338,24 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
     <div id="backendTest"></div>
     <div class="key-help">SERPAPI_KEY / GEMINI_API_KEY / JINA_API_KEY are read from the server's <b>.env</b> file — never from this browser.</div>
 
-    <h2 style="color:var(--muted); margin-top:22px">🔧 Extraction Options</h2>
+    <h2 style="color:#a78bfa; margin-top:22px">🔐 Access Lock (optional)</h2>
+<p class="sub" style="font-size:12px">Personal soft-lock. When enabled, features require your password once per session. Stored as SHA-256 hash — never as plaintext.</p>
+<label class="toggle">
+  <input type="checkbox" id="set_lockEnabled" onchange="document.getElementById('lockFields').classList.toggle('hidden',!this.checked)">
+  <span class="slider"></span>
+  <span>Enable password lock</span>
+</label>
+<div id="lockFields" class="hidden" style="margin-top:12px">
+  <label id="lockCurrentLabel" class="hidden">Current password</label>
+  <input id="set_lockCurrent" type="password" class="mono hidden">
+  <label>New password</label>
+  <input id="set_lockNew" type="password" class="mono" placeholder="min 4 characters">
+  <label>Confirm password</label>
+  <input id="set_lockConfirm" type="password" class="mono">
+</div>
+<div id="lockStatus" class="sub" style="font-size:12px; margin-top:8px">Lock: OFF (no hash stored)</div>
+
+<h2 style="color:var(--muted); margin-top:22px">🔧 Extraction Options</h2>
     <label class="toggle">
       <input type="checkbox" id="set_jina" checked>
       <span class="slider"></span>
@@ -369,6 +387,18 @@ pre.prompt{background:#111; border:1px solid var(--border); border-radius:6px;
   </div>
 </div>
 
+<div id="lockModal" style="position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:100;padding:20px">
+  <div class="panel" style="max-width:400px;width:100%">
+    <h1 style="font-size:18px">🔐 Access required</h1>
+    <p class="sub">Enter your password to continue this session.</p>
+    <input id="lockInput" type="password" class="mono" placeholder="Password" style="margin-top:12px" onkeydown="if(event.key==='Enter')submitLock()">
+    <div id="lockError" style="color:var(--err);font-size:12px;margin-top:6px;min-height:16px"></div>
+    <div class="row">
+      <button class="btn" onclick="submitLock()">🔓 Unlock</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -387,6 +417,15 @@ let client={}, options={}, lastPrompts={}, currentTab='landing', currentId=null;
 const STEPS=['URL','Data','Options','Results','History'];
 const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest'];
 const PROXY_DEFAULT='http://localhost:3000';
+const LOCK_KEYS={enabled:'op_lock_enabled',hash:'op_lock_hash'};
+async function sha256(text){const enc=new TextEncoder().encode(text);const buf=await crypto.subtle.digest('SHA-256',enc);return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}
+function isLockEnabled(){return localStorage.getItem(LOCK_KEYS.enabled)==='1';}
+function getStoredHash(){return localStorage.getItem(LOCK_KEYS.hash)||'';}
+function isUnlocked(){return sessionStorage.getItem('op_unlocked')==='1';}
+let pendingAction=null;
+function ensureUnlocked(action){if(!isLockEnabled()||isUnlocked()){action();return;}pendingAction=action;document.getElementById('lockModal').style.display='flex';setTimeout(()=>document.getElementById('lockInput').focus(),50);}
+async function submitLock(){const input=document.getElementById('lockInput');const stored=getStoredHash();const hash=await sha256(input.value);if(!stored||hash===stored){sessionStorage.setItem('op_unlocked','1');document.getElementById('lockModal').style.display='none';input.value='';document.getElementById('lockError').textContent='';if(pendingAction){const a=pendingAction;pendingAction=null;a();}}else{document.getElementById('lockError').textContent='Wrong password';input.style.animation='none';void input.offsetWidth;input.style.animation='shake 0.4s';}}
+function lockGate(fn){return function(...args){if(isLockEnabled()&&!isUnlocked()){ensureUnlocked(()=>fn.apply(this,args));return;}return fn.apply(this,args);};}
 
 function apiBase(){
   const u=(getSettings().proxyUrl||'').trim();
@@ -467,14 +506,15 @@ function detectProfessionId(text){
   return null;
 }
 
-function go(n){
+const _origGo=go;
+go = lockGate(function(n){
   for(let i=0;i<5;i++) $('#s'+i).classList.toggle('hidden', i!==n);
   $('#stepper').innerHTML = STEPS.map((s,i)=>
     `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
   if(n===0) switchMode('extract');
   if(n===4){ const at=$('#autoLeadsToggle'); if(at) at.checked=localStorage.getItem('op_auto_leads')==='true'; renderLeads(); renderHistory(); }
   window.scrollTo(0,0);
-}
+});
 
 function logLine(msg, type='info'){
   const log = $('#log');
@@ -1246,7 +1286,7 @@ function mergeData(existing, newData){
   return merged;
 }
 
-async function analyze(){
+async function _analyzeOrig(){
   currentId = null;
   let url = $('#f_url').value.trim();
   if(!url){ toast('Please paste a link first'); return; }
@@ -1410,8 +1450,8 @@ function switchMode(mode){
   $('#modeProspectBtn').classList.toggle('active', !isExtract);
   logLine('Mode: ' + mode);
 }
-
-async function prospectSearch(){
+const analyze=lockGate(_analyzeOrig);
+async function _prospectSearchOrig(){
   const prof = ($('#p_prof')?.value||'').trim();
   const city = ($('#p_city')?.value||'').trim();
   const minRating = parseFloat($('#p_minRating')?.value||'0') || 0;
@@ -1655,7 +1695,8 @@ DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typ
   const images = buildImagePrompts(client, options);
   return {landing, identity, outreach, images};
 }
-function generate(){
+const prospectSearch=lockGate(_prospectSearchOrig);
+function _generateOrig(){
   collect();
   if(!client.name||!client.prof||!client.city){toast('Please complete: name, profession, city'); go(1); return;}
   lastPrompts=buildPrompts();
@@ -1687,7 +1728,8 @@ function openInAIStudio(){
   toast('⧉ Copied — paste in AI Studio');
   window.open('https://aistudio.google.com','_blank');
 }
-function openInTool(toolName, url){
+const generate=lockGate(_generateOrig);
+function _openInToolOrig(toolName, url){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>{
     toast('⧉ Copied! Opening ' + toolName + '...');
     setTimeout(()=>window.open(url,'_blank'), 300);
@@ -1722,8 +1764,8 @@ function dl(name,text){
   a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));
   a.download=name; a.click();
 }
-
-function aiImprove(){
+const openInTool=lockGate(_openInToolOrig);
+function _aiImproveOrig(){
   doImprove();
 }
 async function doImprove(){
@@ -1794,7 +1836,9 @@ function delItem(id){
   localStorage.setItem(LS_H, JSON.stringify(getHist().filter(x=>x.id!==id)));
   renderHistory(); toast('🗑 Deleted');
 }
-function exportAll(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
+const aiImprove=lockGate(_aiImproveOrig);
+function _exportAllOrig(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
+const exportAll=lockGate(_exportAllOrig);
 
 function openSettings(){
   $('#overlay').classList.add('open');
@@ -1802,7 +1846,14 @@ function openSettings(){
   $('#set_proxy').value = s.proxyUrl || '';
   $('#set_jina').checked = s.jina !== false;
   updateKeyStatus();
-  testBackend(); // auto-check backend health + configured keys
+  testBackend();
+  const lockOn=isLockEnabled(), hashExists=!!getStoredHash();
+  $('#set_lockEnabled').checked=lockOn;
+  $('#lockFields').classList.toggle('hidden',!lockOn);
+  $('#lockCurrentLabel').classList.toggle('hidden',!hashExists);
+  $('#set_lockCurrent').classList.toggle('hidden',!hashExists);
+  $('#set_lockNew').value='';$('#set_lockConfirm').value='';$('#set_lockCurrent').value='';
+  $('#lockStatus').textContent=lockOn?(hashExists?'Lock: ON (hash stored)':'Lock: ON (no hash yet — set a password below)'):'Lock: OFF (no hash stored)';
 }
 function updateKeyStatus(){
   const cur = $('#set_proxy').value.trim().replace(/\/+$/,'');
@@ -1813,12 +1864,29 @@ function updateKeyStatus(){
   else { el.className = 'key-status empty'; el.style.color=''; el.textContent = 'default: ' + PROXY_DEFAULT; }
 }
 function closeSettings(){$('#overlay').classList.remove('open');}
-function saveSettings(){
-  // Keys no longer live in the browser — saving replaces the old key-shaped blob entirely.
-  const data = {
-    proxyUrl: $('#set_proxy').value.trim(),
-    jina: $('#set_jina').checked
-  };
+async function saveSettings(){
+  const lockEnabled=$('#set_lockEnabled').checked;
+  if(lockEnabled){
+    const hashExists=!!getStoredHash();
+    const np=$('#set_lockNew').value;
+    const cp=$('#set_lockConfirm').value;
+    if(np.length<4){toast('⚠ Password must be at least 4 characters');return;}
+    if(np!==cp){toast("⚠ Passwords don't match");return;}
+    if(hashExists){
+      const cur=$('#set_lockCurrent').value;
+      if(!cur){toast('⚠ Enter current password to change');return;}
+      const curHash=await sha256(cur);
+      if(curHash!==getStoredHash()){toast('⚠ Current password incorrect');return;}
+    }
+    const newHash=await sha256(np);
+    localStorage.setItem(LOCK_KEYS.enabled,'1');
+    localStorage.setItem(LOCK_KEYS.hash,newHash);
+    sessionStorage.setItem('op_unlocked','1');
+  } else {
+    localStorage.removeItem(LOCK_KEYS.enabled);
+    localStorage.removeItem(LOCK_KEYS.hash);
+  }
+  const data = { proxyUrl: $('#set_proxy').value.trim(), jina: $('#set_jina').checked };
   try {
     localStorage.setItem(LS_S, JSON.stringify(data));
     const verify = JSON.parse(localStorage.getItem(LS_S) || '{}');
