@@ -515,8 +515,7 @@ function detectProfessionId(text){
   return null;
 }
 
-const _origGo=go;
-go = lockGate(function(n){
+var go = lockGate(function(n){
   for(let i=0;i<5;i++) $('#s'+i).classList.toggle('hidden', i!==n);
   $('#stepper').innerHTML = STEPS.map((s,i)=>
     `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
