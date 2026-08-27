@@ -2224,10 +2224,10 @@ function buildPackIndex(client, options){
 
   const serviceCards = services.map((s,i)=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:18px"><h3 style="color:'+tone.heading+';margin:0 0 6px">'+n(s.split(' & ')[0])+'</h3><p style="color:'+tone.text+';margin:0;font-size:15px;line-height:1.6">'+n(s)+'</p></div>').join('\n        ');
 
-  const reviewCards = strengths.length ? strengths.map(s=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:20px"><p style="color:'+tone.text+';font-size:16px;line-height:1.7;margin:0;font-style:italic">\u201c'+n(s)+'\u201d</p><div style="color:#f59e0b;margin-top:10px;font-size:18px">\u2605\u2605\u2605\u2605\u2605</div></div>').join('\n        ')
+  const reviewCards = strengths.length ? strengths.slice(0,3).map(s=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:20px"><p style="color:'+tone.text+';font-size:16px;line-height:1.7;margin:0;font-style:italic">\u201c'+n(s)+'\u201d</p><div style="color:#f59e0b;margin-top:10px;font-size:18px">\u2605\u2605\u2605\u2605\u2605</div></div>').join('\n        ')
     : '<div style="color:'+tone.text+'">Trusted by patients across '+n(city||'the area')+'.</div>';
 
-  const faqItems = concerns.length ? concerns.map((co,i)=>'<details style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px"><summary style="cursor:pointer;font-weight:600;color:'+tone.heading+'">'+n('Q'+(i+1))+'. Will I get a clear, upfront plan?</summary><p style="color:'+tone.text+';margin:10px 0 0">'+n(co)+'.</p></details>').join('\n        ')
+  const faqItems = concerns.length ? concerns.slice(0,4).map((co,i)=>'<details style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px"><summary style="cursor:pointer;font-weight:600;color:'+tone.heading+'">'+n('Q'+(i+1))+'. Will I get a clear, upfront plan?</summary><p style="color:'+tone.text+';margin:10px 0 0">'+n(co)+'.</p></details>').join('\n        ')
     : '<div style="color:'+tone.text+'">Contact us — we are happy to answer any question.</div>';
 
   const langAttr = isAr ? ' ar' : '';
