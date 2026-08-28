@@ -580,6 +580,30 @@ async function pushState(){
   } catch(err) { console.warn('sync push failed', err); }
 }
 
+function markSyncMerged(docPath){ try { localStorage.setItem('op_sync_merged_' + docPath.split('/')[1], '1'); } catch(e){} }
+function mergeByTs(a, b){
+  const seen = {}; const out = [];
+  function add(x){
+    if(!x || x.id == null) return;
+    const i = x.id;
+    if(!(i in seen)){ seen[i] = true; out.push(x); return; }
+    const j = out.findIndex(v => String(v.id) === String(i));
+    if(j >= 0 && String(x.ts||'') > String(out[j].ts||'')) out[j] = x;
+  }
+  (b||[]).forEach(add); (a||[]).forEach(add);
+  return out;
+}
+function mergeLeads(a, b){
+  const seen = {}; const out = [];
+  function add(x){
+    if(!x) return;
+    const k = String(x.name||'').toLowerCase() + '#' + String(x.city||'').toLowerCase();
+    if(!(k in seen)){ seen[k] = true; out.push(x); }
+  }
+  (b||[]).forEach(add); (a||[]).forEach(add);
+  return out;
+}
+
 function subscribe(){
   syncOn = true; lastKnownSig = '';
   const doSub = async () => {
@@ -588,17 +612,31 @@ function subscribe(){
       unsub = fb.db.doc(fb.docPath).onSnapshot(function(snap){
         if(applyingRemote) return;
         const r = snap.data();
-        if(!r) return pushState();
+        if(!r){ markSyncMerged(fb.docPath); return pushState(); }
         if(r.sig && r.sig === lastKnownSig) return;
+        let merged = false;
+        if(localStorage.getItem('op_sync_merged_' + fb.docPath.split('/')[1]) !== '1'){
+          const mh = mergeByTs(getHist(), r.history || []);
+          const ml = mergeLeads(getLeads(), r.leads || []);
+          if(mh.length !== (r.history||[]).length || ml.length !== (r.leads||[]).length){
+            merged = true;
+            localStorage.setItem(LS_H, JSON.stringify(mh));
+            localStorage.setItem(LS_L, JSON.stringify(ml));
+          }
+        }
         applyingRemote = true;
         try {
           lastKnownSig = r.sig || '';
-          localStorage.setItem(LS_H, JSON.stringify(r.history || []));
-          localStorage.setItem(LS_L, JSON.stringify(r.leads || []));
+          if(!merged){
+            localStorage.setItem(LS_H, JSON.stringify(r.history || []));
+            localStorage.setItem(LS_L, JSON.stringify(r.leads || []));
+          }
+          markSyncMerged(fb.docPath);
           renderHistory(); renderLeads();
-          toast('☁️ Synced from another device');
+          toast(merged ? '☁️ Merged with cloud' : '☁️ Synced from another device');
         } catch(e){ console.warn('sync apply failed', e); }
         finally { applyingRemote = false; }
+        if(merged) pushState();
       }, function(err){
         console.warn('sync listen failed', err);
         setSyncStatus('🔴 error: ' + (err.message || 'listen'));
