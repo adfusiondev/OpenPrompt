@@ -539,7 +539,7 @@ async function loadFirebase(){
   const cfg = getSyncConfig();
   if(!cfg.apiKey || !cfg.projectId || !cfg.appId) return Promise.reject(new Error('Missing Firebase config'));
   const storedHash = localStorage.getItem(SYNC_HASH) || '';
-  const docPath = 'openprompt/' + storedHash.slice(0,16) + '/state';
+  const docPath = 'openprompt/' + storedHash.slice(0,16);
   const key = JSON.stringify(cfg) + '|' + storedHash;
   if(firebaseReady && fbConfigKey === key) return firebaseReady;
   fbConfigKey = key;

@@ -23,3 +23,7 @@ config.local.json
 # Node backend
 node_modules/
 npm-debug.log*
+
+# Electron build artifacts
+node_modules/
+desktop/dist/
