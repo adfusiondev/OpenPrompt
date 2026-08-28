@@ -35,6 +35,7 @@
 | 18a | Project Pack (تصدير AGENTS.md + PROJECT_CONTEXT.md + PROJECT_STATUS.md + index.html) | 15 دقيقة | 100% | ✅ |
 | 18b | Project Pack index.html skeleton generator | 15 دقيقة | 100% | ✅ |
 | 18c | Inline prompt editing (Ready-to-use Prompts) | 15 دقيقة | 100% | ✅ |
+| 17b | ☁️ Cloud Sync (Firebase realtime — History + Leads) | 20 دقيقة | 100% | ✅ |
 
 ---
 
