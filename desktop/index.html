@@ -687,12 +687,19 @@ async function saveSyncSettings(){
 function autoConnectSync(){
   if(localStorage.getItem(SYNC_ENABLED) !== '1') return;
   const cfg = getSyncConfig();
-  if(!cfg.apiKey){ localStorage.setItem(SYNC_ENABLED,'0'); setSyncStatus('Sync: OFF'); return; }
+  if(!cfg.apiKey){
+    localStorage.setItem(SYNC_ENABLED,'0'); setSyncStatus('Sync: OFF');
+    toast('☁️ Sync was enabled but Firebase config is missing — open ⚙ Settings');
+    return;
+  }
   syncOn = true; applyingRemote = false;
   setSyncStatus('Sync: Connecting…');
-  loadFirebase().then(function(){ if(syncOn) subscribe(); }).catch(function(err){
+  loadFirebase().then(function(){
+    if(syncOn){ subscribe(); toast('☁️ Cloud sync connected'); }
+  }).catch(function(err){
     syncOn = false;
     setSyncStatus('🔴 error: ' + (err.message || 'connect'));
+    toast('🔴 Sync failed — check ⚙ Settings');
   });
 }
 
