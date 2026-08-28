@@ -505,7 +505,7 @@ function lockGate(fn){return function(...args){if(isLockEnabled()&&!isUnlocked()
 
 /* ── ☁️ Cloud Sync (optional, user's own Firebase project) ── */
 const SYNC_CFG='op_sync_config', SYNC_HASH='op_sync_hash', SYNC_ENABLED='op_sync_enabled';
-let syncOn=false, applyingRemote=false, lastPushAt=0, unsub=null, pushTimer=null, firebaseReady=null, fbConfigKey='', fbScripts=null;
+let syncOn=false, applyingRemote=false, lastPushAt=0, lastKnownSig='', unsub=null, pushTimer=null, firebaseReady=null, fbConfigKey='', fbScripts=null;
 
 function getSyncConfig(){ try { return JSON.parse(localStorage.getItem(SYNC_CFG)||'{}'); } catch(e){ return {}; } }
 function setSyncStatus(txt){
@@ -573,13 +573,15 @@ async function pushState(){
       updatedAt: Date.now(),
       device: navigator.platform || 'unknown'
     };
+    payload.sig = await sha256(JSON.stringify({ history: payload.history, leads: payload.leads }));
     lastPushAt = payload.updatedAt;
+    lastKnownSig = payload.sig;
     await fb.db.doc(fb.docPath).set(payload);
   } catch(err) { console.warn('sync push failed', err); }
 }
 
 function subscribe(){
-  syncOn = true;
+  syncOn = true; lastKnownSig = '';
   const doSub = async () => {
     try {
       const fb = await loadFirebase();
@@ -587,16 +589,16 @@ function subscribe(){
         if(applyingRemote) return;
         const r = snap.data();
         if(!r) return pushState();
-        if(r.updatedAt > lastPushAt){
-          applyingRemote = true;
-          try {
-            localStorage.setItem(LS_H, JSON.stringify(r.history || []));
-            localStorage.setItem(LS_L, JSON.stringify(r.leads || []));
-            renderHistory(); renderLeads();
-            toast('☁️ Synced from another device');
-          } catch(e){ console.warn('sync apply failed', e); }
-          finally { applyingRemote = false; }
-        }
+        if(r.sig && r.sig === lastKnownSig) return;
+        applyingRemote = true;
+        try {
+          lastKnownSig = r.sig || '';
+          localStorage.setItem(LS_H, JSON.stringify(r.history || []));
+          localStorage.setItem(LS_L, JSON.stringify(r.leads || []));
+          renderHistory(); renderLeads();
+          toast('☁️ Synced from another device');
+        } catch(e){ console.warn('sync apply failed', e); }
+        finally { applyingRemote = false; }
       }, function(err){
         console.warn('sync listen failed', err);
         setSyncStatus('🔴 error: ' + (err.message || 'listen'));
