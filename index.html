@@ -652,9 +652,10 @@ function subscribe(){
 
 async function saveSyncSettings(){
   const enabled = $('#set_syncEnabled').checked;
-  const apiKey = $('#set_fbApiKey').value.trim();
-  const projectId = $('#set_fbProjectId').value.trim();
-  const appId = $('#set_fbAppId').value.trim();
+  const sconfPrev = getSyncConfig();
+  const apiKey = $('#set_fbApiKey').value.trim() || sconfPrev.apiKey || '';
+  const projectId = $('#set_fbProjectId').value.trim() || sconfPrev.projectId || '';
+  const appId = $('#set_fbAppId').value.trim() || sconfPrev.appId || '';
   const pass = $('#set_syncPasscode').value;
   if(enabled){
     if(!apiKey || !projectId || !appId){ toast('⚠ Fill Firebase API Key, Project ID and App ID'); setSyncStatus('🔴 error: missing config'); return; }
@@ -2157,10 +2158,13 @@ function openSettings(){
   const sconf = getSyncConfig();
   $('#set_syncEnabled').checked = localStorage.getItem(SYNC_ENABLED) === '1';
   $('#syncFields').classList.toggle('hidden', !$('#set_syncEnabled').checked);
-  $('#set_fbApiKey').value = sconf.apiKey || '';
-  $('#set_fbProjectId').value = sconf.projectId || '';
-  $('#set_fbAppId').value = sconf.appId || '';
+  $('#set_fbApiKey').value = '';
+  $('#set_fbProjectId').value = '';
+  $('#set_fbAppId').value = '';
   $('#set_syncPasscode').value = '';
+  $('#set_fbApiKey').placeholder = sconf.apiKey ? '••••••••  (saved)' : 'AIza...';
+  $('#set_fbProjectId').placeholder = sconf.projectId ? '••••••••  (saved)' : 'openprompt-sync';
+  $('#set_fbAppId').placeholder = sconf.appId ? '••••••••  (saved)' : '1:xxxx:web:...';
 }
 function updateKeyStatus(){
   const cur = $('#set_proxy').value.trim().replace(/\/+$/,'');
