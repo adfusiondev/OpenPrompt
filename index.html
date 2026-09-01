@@ -307,6 +307,8 @@ pre.prompt[contenteditable="true"]{outline:none}
       <label style="color:#a78bfa; font-weight:600">📦 Project Pack — ready-to-build client folder</label>
       <p class="sub" style="font-size:12px">Download the 5 files into one folder, then open it in OpenCode/Cursor/Claude Code.</p>
       <div class="row">
+      <div id="packHealth" style="margin:10px 0 0; font-size:12px; line-height:1.5"></div>
+      <div class="row" style="margin-top:10px">
         <button class="btn ghost small" onclick="dlPack('index')">⬇ index.html</button>
         <button class="btn ghost small" onclick="dlPack('agents')">⬇ AGENTS.md</button>
         <button class="btn ghost small" onclick="dlPack('context')">⬇ PROJECT_CONTEXT.md</button>
@@ -761,6 +763,7 @@ const PROF_CATS = [
   ['veterinary', /(veterinar|\bvet\b|\u0628\u064a\u0637\u0631)/i, 'Veterinary clinic'],
   ['restaurant', /(restaurant|cafe|coffee|pizza|burger|\u0645\u0637\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0627\u0641\u064a\u0647)/i, 'Restaurant'],
   ['legal',      /(law|attorney|legal|\u0645\u062d\u0627\u0645)/i, 'Law office'],
+  ['plastic',    /(plastic surgeon|cosmetic surgeon|plastic surgery|chirurgie esth\u00e9tique|chirurgien esth\u00e9tique|chirurgie plastique|\u062c\u0631\u0627\u062d\u0629 \u062a\u062c\u0645\u064a\u0644|\u062a\u062c\u0645\u064a\u0644|esth\u00e9ticien)/i, 'Plastic & cosmetic surgery'],
   ['medical',    /(clinic|medical|doctor|hospital|\u0639\u064a\u0627\u062f|\u0637\u0628\u064a\u0628|\u0645\u0633\u062a\u0634\u0641\u0649|\u0645\u0631\u0643\u0632 \u0637\u0628)/i, 'Medical clinic']
 ];
 const CAT_LABEL = Object.fromEntries(PROF_CATS.map(([id,,label]) => [id,label]));
@@ -774,6 +777,7 @@ const SERVICES_HINT = {
   veterinary: 'vaccinations, surgery, grooming, emergency care, dental care for pets',
   restaurant: 'signature dishes & menu highlights, online reservation, delivery/order online, family & group offers, chef specials',
   legal: 'free initial consultation, contracts & drafting, court representation, corporate legal advice',
+  plastic: 'Rhinoplasty, Liposuction & body contouring, Breast augmentation, Botox & fillers, Blepharoplasty, Post-operative care',
   medical: 'specialist consultations, lab tests & diagnostics, chronic disease follow-up, online appointment booking'
 };
 
@@ -789,6 +793,7 @@ var go = lockGate(function(n){
     `<button class="step ${i===n?'active':''}" onclick="go(${i})">${i+1}. ${s}</button>`).join('');
   if(n===0) switchMode('extract');
   if(n===4){ const at=$('#autoLeadsToggle'); if(at) at.checked=localStorage.getItem('op_auto_leads')==='true'; renderLeads(); renderHistory(); }
+  if(n===3) refreshPackHealth();
   window.scrollTo(0,0);
 });
 
@@ -1176,10 +1181,36 @@ function normalizeGeminiKeys(d){
   return d;
 }
 
-async function generateUSP(timeoutMs){
+const USP_DEGENERATE_RE = /^(location|prix|price|qualité|quality|expérience|experience|service|professional|équipe|team)$/i;
+function isDegenerateUSP(u){
+  const s = String(u || '').trim();
+  if (!s) return true;
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length < 6 || words.length > 20) return true;
+  if (USP_DEGENERATE_RE.test(s)) return true;
+  return false;
+}
+function buildFallbackUSP(c){
+  const prof = c.prof || 'clinic';
+  const city = c.city || '';
+  const rating = c.rating || '5.0';
+  const reviews = c.reviews || '0';
+  const prim = String((options && options.lang) || 'en').split('_')[0];
+  if (prim === 'fr') return `${prof} à ${city}, notée ${rating}⭐ par ${reviews} patientes`;
+  if (prim === 'ar') return `${prof} في ${city} بتقييم ${rating}⭐ من ${reviews} مريضًا`;
+  return `${prof} in ${city}, rated ${rating}⭐ by ${reviews} patients`;
+}
+
+async function generateUSP(timeoutMs, retry=false){
   try {
     logLine('🎯 Generating USP options...', 'info');
-    const prompt = `Generate 3 distinct Unique Selling Proposition (USP) options.
+    const prompt = retry
+      ? `Generate 3 distinct Unique Selling Proposition (USP) options.
+Business: ${client.name}, ${client.prof}, ${client.city}
+Rating: ${client.rating || '—'} stars (${client.reviews || '—'} reviews)
+Each USP must be 8-15 words stating a concrete patient benefit; never a single concept word like 'Location'.
+Return ONLY valid JSON (no markdown, no explanation): {"usps": ["...", "...", "..."]}`
+      : `Generate 3 distinct Unique Selling Proposition (USP) options.
 Business: ${client.name}, ${client.prof}, ${client.city}
 Rating: ${client.rating || '—'} stars (${client.reviews || '—'} reviews)
 Website: ${client.website_url || 'none'} | Hours: ${client.hours || '—'}
@@ -1198,8 +1229,17 @@ Return ONLY valid JSON (no markdown, no explanation): {"usps": ["...", "...", ".
       if (m) { try { data = JSON.parse(m[0]); } catch(e2) {} }
     }
     if (!data || !Array.isArray(data.usps)) { logLine('  ✗ USP: invalid JSON shape', 'warn'); return false; }
-    client.usps = data.usps.map(u => String(u || '').trim()).filter(Boolean).slice(0, 3);
-    if (!client.usps.length) { logLine('  ✗ USP: no usable options returned', 'warn'); return false; }
+    let valid = data.usps.map(u => String(u || '').trim()).filter(u => !isDegenerateUSP(u)).slice(0, 3);
+    if (valid.length < 2) {
+      if (!retry) {
+        logLine('  ⚠ Too few valid USPs (<2) — retrying with stricter instructions', 'warn');
+        return generateUSP(timeoutMs, true);
+      }
+      logLine('  ⚠ Usable USPs still degenerate — falling back to data-built USP', 'warn');
+      valid = [buildFallbackUSP(client)];
+    }
+    client.usps = valid;
+    client.selectedUSP = valid[0];
     logLine('  ✓ ' + client.usps.length + ' USP options ready', 'ok');
     return true;
   } catch(e) { logLine('USP error: ' + e.message, 'warn'); return false; }
@@ -1495,6 +1535,7 @@ function buildImagePrompts(c, opts){
     physio: { subject: 'spacious physiotherapy studio with a therapist guiding a patient through recovery exercises', palette: 'soft green and warm grey with natural wood tones', env: 'bright rehabilitation center with exercise equipment and natural light' },
     legal: { subject: 'elegant law office with a confident attorney seated at a mahogany desk', palette: 'warm walnut wood, leather brown, and cream with brass accents', env: 'refined office with floor-to-ceiling bookshelves, legal volumes, and warm ambient lighting' },
     medical: { subject: 'professional medical clinic reception with a welcoming healthcare team', palette: 'clean white and calm blue with silver accents', env: 'modern medical facility with a bright reception area and subtle greenery' },
+    plastic: { subject: 'a plastic surgeon reviewing a consultation with a patient in a refined consultation lounge', palette: 'warm neutral tones with soft beige and sand accents', env: 'elegant aesthetic clinic consultation lounge, warm neutral tones, soft golden light, refined minimal decor' },
     restaurant: { subject: 'inviting restaurant interior with a chef presenting a signature dish at a beautifully set table', palette: 'warm amber and deep green with copper accents', env: 'stylish dining space with soft pendant lighting, textured walls, and elegant table settings' },
     pharmacy: { subject: 'bright modern pharmacy with a pharmacist assisting a customer at the consultation counter', palette: 'clean white and fresh green with soft blue accents', env: 'well-organized pharmacy interior with lit shelving and a welcoming consultation area' },
     veterinary: { subject: 'friendly veterinary clinic with a vet gently examining a pet on the examination table', palette: 'soft teal and warm beige with natural wood tones', env: 'bright, caring clinic environment with pet-friendly design elements' }
@@ -1907,6 +1948,8 @@ function buildPrompts(){
     fr_ar:'Bilingual (French + Arabic) — build a page with a prominent French section (LTR, Inter font) AND an Arabic section (dir=rtl, Tajawal font). Include a visible language switcher (FR/AR). Each section must contain the full content: hero, services, about, reviews, FAQ, location, footer. Both languages must carry the same clinic name and data. Do NOT simply append a translation — design each language block as a complete, styled section.',
     fr_ar_en:'Trilingual (French + Arabic + English) — build a page with three language blocks: French (LTR, Inter font), Arabic (dir=rtl, Tajawal font), and English (LTR, Inter font). Include a language switcher (FR/AR/EN). Each block must contain the full content: hero, services, about, reviews, FAQ, location, footer. All three languages must carry the same clinic name and data. Do NOT just append translations — design each language block as a complete, styled section.'
   }[options.lang];
+  const _langTokens = String(options.lang||'en').split('_').filter(Boolean);
+  const BUILD_ORDER = _langTokens.length > 1 ? ("\nBUILD ORDER: 1) complete the FULL deep page in the primary language (" + _langTokens[0] + "); 2) THEN add the other languages (" + _langTokens.slice(1).join(' + ') + ") with a switcher. One deep page first, never three shallow blocks.") : "";
   const CTA = {
     whatsapp:`WhatsApp booking — real number: ${client.phone||'[PASTE NUMBER]'}. CRITICAL JS REQUIREMENT: Include a complete, functional <script> tag before </body> that (1) selects the booking form by id or tag, (2) intercepts its submit event with e.preventDefault(), (3) extracts the name, phone, and service fields from the form, (4) builds the message body including the service name and patient name, and (5) opens https://wa.me/${client.phone.replace(/[^0-9]/g,'')||'[PASTE_NUMBER]'}?text={encoded_message} in a new tab via window.open(). Use encodeURIComponent for the text parameter. The script must be fully working production code — NO mock alerts, NO placeholder callbacks, NO console.log stubs. If the form has no id, add one (e.g. id="bookingForm").`,
     call:'Direct phone call with click-to-call',
@@ -1961,7 +2004,7 @@ VISUAL TONE: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n
 
 SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location (Embed a LIVE Google Map using the embed src above (keyless iframe), and add a prominent 'Get Directions' button linking to the directions link. Do NOT use a placeholder map.) + footer.
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
-OUTPUT: single self-contained HTML/CSS/JS file.`;
+OUTPUT: single self-contained HTML/CSS/JS file.${BUILD_ORDER}`;
 
   const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}
 
@@ -2459,12 +2502,55 @@ function packMapData(c){
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+const SERVICES_LOC = {
+  plastic: {
+    fr: ['Rhinoplastie','Liposuccion & silhouette','Augmentation mammaire','Botox & fillers','Blépharoplastie','Suivi post-opératoire'],
+    en: ['Rhinoplasty','Liposuction & body contouring','Breast augmentation','Botox & fillers','Blepharoplasty','Post-operative care'],
+    ar: ['تجميل الأنف','شفط الدهون ونحت القوام','تكبير الثدي','بوتوكس وفيلر','جراحة الجفون','متابعة ما بعد العملية']
+  }
+};
+function packPrimaryLang(o){ return String((o && o.lang) || 'en').split('_')[0]; }
+const PACK_STRINGS = {
+  fr: {
+    htmlLang:'fr', dir:'', font:'Inter',
+    servTitle:'Nos soins', aboutTitle:'À propos', reviewsTitle:'Avis de nos patientes',
+    faqTitle:'Questions fréquentes', visitTitle:'Nous rendre visite',
+    cta:{ whatsapp:'Réserver via WhatsApp', call:'Appeler maintenant', booking:'Prendre rendez-vous', visit:'Nous rendre visite', fallback:'Réserver' },
+    ratingWord:'Note Google', reviewsWord:'Avis', locWord:'Localisation',
+    heroTag:function(prof,city){ return 'à ' + (city || 'votre région'); },
+    aboutText:function(name,prof,city){ return name + ' est ' + prof + (city ? ' à ' + city : '') + ', conçu autour d\'un objectif : rendre chaque visite claire, confortable et orientée résultats.'; },
+    hoursTxt:'Horaires', addrTxt:'Adresse', directions:'Obtenir l\'itinéraire', waTxt:'Discuter sur WhatsApp', footDir:'Itinéraire', faqQ:'Aurai-je un plan clair et précis ?', faqIntro:'Contactez-nous — nous répondons à toutes vos questions.'
+  },
+  en: {
+    htmlLang:'en', dir:'', font:'Inter',
+    servTitle:'Our Services', aboutTitle:'About Us', reviewsTitle:'What Patients Say',
+    faqTitle:'Frequently Asked Questions', visitTitle:'Visit Us',
+    cta:{ whatsapp:'Book via WhatsApp', call:'Call Now', booking:'Book Appointment', visit:'Visit Us', fallback:'Book Now' },
+    ratingWord:'Google rating', reviewsWord:'Reviews', locWord:'Location',
+    heroTag:function(prof,city){ return 'in ' + (city || 'your area'); },
+    aboutText:function(name,prof,city){ return name + ' is a ' + prof + (city ? ' in ' + city : '') + ', built around one goal: making every visit clear, comfortable and results-driven.'; },
+    hoursTxt:'Working hours', addrTxt:'Address', directions:'Get Directions', waTxt:'Chat on WhatsApp', footDir:'Get Directions', faqQ:'Will I get a clear, upfront plan?', faqIntro:'Contact us — we are happy to answer any question.'
+  },
+  ar: {
+    htmlLang:'ar', dir:' dir="rtl"', font:'Tajawal',
+    servTitle:'خدماتنا', aboutTitle:'من نحن', reviewsTitle:'آراء مرضانا',
+    faqTitle:'الأسئلة الشائعة', visitTitle:'زورونا',
+    cta:{ whatsapp:'الحجز عبر واتساب', call:'اتصل الآن', booking:'احجز موعدًا', visit:'زورونا', fallback:'احجز الآن' },
+    ratingWord:'تقييم جوجل', reviewsWord:'مراجعة', locWord:'الموقع',
+    heroTag:function(prof,city){ return 'في ' + (city || 'منطقتك'); },
+    aboutText:function(name,prof,city){ return name + ' هو ' + prof + (city ? ' في ' + city : '') + '، صُمم لهدف واحد: جعل كل زيارة واضحة ومريحة وذات نتائج.'; },
+    hoursTxt:'ساعات العمل', addrTxt:'العنوان', directions:'الاتجاهات', waTxt:'الدردشة عبر واتساب', footDir:'الاتجاهات', faqQ:'هل سأحصل على خطة واضحة ومسبقة؟', faqIntro:'تواصل معنا — يسعدنا الإجابة على جميع أسئلتك.'
+  }
+};
+
 function buildPackIndex(client, options){
   const c = client || {}, o = options || {};
-  const isAr = o.lang === 'ar';
-  const tone = PACK_TONES[o.tone] || PACK_TONES.trust;
-  const font = isAr ? 'Tajawal' : 'Inter';
+  const prim = packPrimaryLang(o);
+  const S = PACK_STRINGS[prim] || PACK_STRINGS.en;
+  const isAr = prim === 'ar';
   const dir = isAr ? ' dir="rtl"' : '';
+  const font = S.font;
+  const tone = PACK_TONES[o.tone] || PACK_TONES.trust;
   const name = c.name || 'Our Clinic';
   const prof = c.prof || 'Clinic';
   const city = c.city || '';
@@ -2472,35 +2558,51 @@ function buildPackIndex(client, options){
   const reviews = c.reviews || '0';
   const phone = c.phone || '';
   const phoneDigits = packPhoneDigits(phone);
-  const waLink = phoneDigits ? ('https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent('Hello ' + name)) : '#booking';
+  const waMsg = encodeURIComponent('Hello ' + name);
+  const waLink = phoneDigits ? ('https://wa.me/' + phoneDigits + '?text=' + waMsg) : '#booking';
   const map = packMapData(c);
-  const ctaLabels = {whatsapp:'Book via WhatsApp', call:'Call Now', booking:'Book Appointment', visit:'Visit Us'};
-  const cta = ctaLabels[o.cta] || 'Book Now';
+  const ctaLabels = S.cta;
+  const cta = ctaLabels[o.cta] || ctaLabels.fallback || 'Book Now';
   const ctaHref = o.cta==='whatsapp' ? waLink : (o.cta==='call' ? ('tel:'+phone) : (o.cta==='visit' ? map.dirsLink : '#booking'));
   const usp = c.selectedUSP || ('Trusted ' + prof + (city ? ' in ' + city : ''));
   const catId = detectProfessionId((prof||'')+' '+(name||''));
-  const services = (SERVICES_HINT[catId] || SERVICES_HINT.medical).split(',').map(s=>s.trim()).filter(Boolean).slice(0,6);
+  let services;
+  const sloc = SERVICES_LOC[catId];
+  if (sloc && sloc[prim]) {
+    services = sloc[prim].map(s=>s.trim()).filter(Boolean).slice(0,6);
+  } else {
+    const seen = new Set();
+    services = (SERVICES_HINT[catId] || SERVICES_HINT.medical).split(',').map(s=>s.trim()).filter(Boolean)
+      .filter(s=>{ const k=s.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,6);
+  }
   const strengths = (c.insights && Array.isArray(c.insights.strengths)) ? c.insights.strengths : [];
   const concerns  = (c.insights && Array.isArray(c.insights.concerns))  ? c.insights.concerns  : [];
+  const hasStrengths = strengths.length > 0;
+  const hasConcerns = concerns.length > 0;
   const title = name + ' | ' + prof + (city ? ' in ' + city : '');
   const n = s => esc(s);
 
-  const serviceCards = services.map((s,i)=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:18px"><h3 style="color:'+tone.heading+';margin:0 0 6px">'+n(s.split(' & ')[0])+'</h3><p style="color:'+tone.text+';margin:0;font-size:15px;line-height:1.6">'+n(s)+'</p></div>').join('\n        ');
+  const serviceCards = services.map(s=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:18px"><h3 style="color:'+tone.heading+';margin:0 0 6px">'+n(s.split(' & ')[0])+'</h3><p style="color:'+tone.text+';margin:0;font-size:15px;line-height:1.6">'+n(s)+'</p></div>').join('\n        ');
 
-  const reviewCards = strengths.length ? strengths.slice(0,3).map(s=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:20px"><p style="color:'+tone.text+';font-size:16px;line-height:1.7;margin:0;font-style:italic">\u201c'+n(s)+'\u201d</p><div style="color:#f59e0b;margin-top:10px;font-size:18px">\u2605\u2605\u2605\u2605\u2605</div></div>').join('\n        ')
-    : '<div style="color:'+tone.text+'">Trusted by patients across '+n(city||'the area')+'.</div>';
+  const reviewCards = hasStrengths ? strengths.slice(0,3).map(s=>'<div style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:10px;padding:20px"><p style="color:'+tone.text+';font-size:16px;line-height:1.7;margin:0;font-style:italic">\u201c'+n(s)+'\u201d</p><div style="color:#f59e0b;margin-top:10px;font-size:18px">\u2605\u2605\u2605\u2605\u2605</div></div>').join('\n        ') : '';
 
-  const faqItems = concerns.length ? concerns.slice(0,4).map((co,i)=>'<details style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px"><summary style="cursor:pointer;font-weight:600;color:'+tone.heading+'">'+n('Q'+(i+1))+'. Will I get a clear, upfront plan?</summary><p style="color:'+tone.text+';margin:10px 0 0">'+n(co)+'.</p></details>').join('\n        ')
-    : '<div style="color:'+tone.text+'">Contact us — we are happy to answer any question.</div>';
+  const faqItems = hasConcerns ? concerns.slice(0,4).map((co,i)=>'<details style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px"><summary style="cursor:pointer;font-weight:600;color:'+tone.heading+'">'+n('Q'+(i+1))+'. '+n(S.faqQ)+'</summary><p style="color:'+tone.text+';margin:10px 0 0">'+n(co)+'.</p></details>').join('\n        ') : '';
+
+  const reviewsSection = hasStrengths
+    ? '<section id="reviews" class="reviews">\n  <div class="container">\n    <h2>'+n(S.reviewsTitle)+'</h2>\n    <div class="grid">\n        '+reviewCards+'\n    </div>\n  </div>\n</section>'
+    : '';
+  const faqSection = hasConcerns
+    ? '<section id="faq" class="faq">\n  <div class="container">\n    <h2>'+n(S.faqTitle)+'</h2>\n    <div>\n        '+faqItems+'\n    </div>\n  </div>\n</section>'
+    : '';
 
   const langAttr = isAr ? ' ar' : '';
   const html = `<!DOCTYPE html>
-<html lang="`+ (isAr?'ar':'en') + `"` + dir + `>
+<html lang="`+ S.htmlLang + `"` + S.dir + `>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>`+n(title)+`</title>
-<meta name="description" content="`+n(name)+` — `+n(prof+(city?' in '+city:'')) +`. `+n(rating)+`\u2b50 with `+n(reviews)+` reviews. `+n(usp)+`.">
+<meta name="description" content="`+n(name)+` — `+n(prof+(city?' in '+city:'')) +`. `+n(rating)+`\u2b50 (`+n(reviews)+` reviews). `+n(usp)+`.">
 <meta property="og:title" content="`+n(title)+`">
 <meta property="og:description" content="`+n(usp)+`">
 <meta property="og:type" content="website">
@@ -2542,22 +2644,22 @@ details{margin-bottom:12px}
 
 <header class="hero">
   <div class="container">
-    <span class="rating-badge">`+n(rating)+`\u2b50 (`+n(reviews)+` reviews)</span>
+    <span class="rating-badge">`+n(rating)+`\u2b50 (`+n(reviews)+` `+n(S.reviewsWord)+`)</span>
     <h1>`+n(usp)+`</h1>
-    <p>`+n(name)+` — `+n(prof)+(city?' in '+n(city):'')+`. We're here to give you a clear, comfortable and stress-free experience.</p>
+    <p>`+n(name)+` — `+n(prof)+` `+n(S.heroTag(prof,city))+`. `+n(S.aboutText('','',''))+`</p>
     <a class="btn" href="`+ctaHref+`"`+(ctaHref==='#booking'?' onclick="document.getElementById(\'booking\').scrollIntoView()"':'')+`>`+n(cta)+`</a>
   </div>
 </header>
 
 <div class="trustbar">
-  <div><b>`+n(rating)+`\u2b50</b><span>Google rating</span></div>
-  <div><b>`+n(reviews)+`</b><span>Reviews</span></div>
-  <div><b>`+n(city||'Local')+`</b><span>Location</span></div>
+  <div><b>`+n(rating)+`\u2b50</b><span>`+n(S.ratingWord)+`</span></div>
+  <div><b>`+n(reviews)+`</b><span>`+n(S.reviewsWord)+`</span></div>
+  <div><b>`+n(city||'Local')+`</b><span>`+n(S.locWord)+`</span></div>
 </div>
 
 <section id="services" class="services">
   <div class="container">
-    <h2>Our Services</h2>
+    <h2>`+n(S.servTitle)+`</h2>
     <div class="grid">
         `+serviceCards+`
     </div>
@@ -2566,52 +2668,38 @@ details{margin-bottom:12px}
 
 <section id="about" class="about">
   <div class="container">
-    <h2>About Us</h2>
+    <h2>`+n(S.aboutTitle)+`</h2>
     <div class="grid">
-      <p>`+n(name)+` is a `+n(prof)+` `+(city?' in '+n(city):'')+` built around one goal: making every visit clear, comfortable and results-driven.</p>
-      `+(c.hours?'<p><b>Working hours:</b> '+n(c.hours)+'</p>':'')+`
-      `+(c.address?'<p><b>Address:</b> '+n(c.address)+'</p>':'')+`
+      <p>`+n(S.aboutText(name,prof,city))+`</p>
+      `+(c.hours?'<p><b>'+n(S.hoursTxt)+':</b> '+n(c.hours)+'</p>':'')+`
+      `+(c.address?'<p><b>'+n(S.addrTxt)+':</b> '+n(c.address)+'</p>':'')+`
     </div>
   </div>
 </section>
 
-<section id="reviews" class="reviews">
-  <div class="container">
-    <h2>What Patients Say</h2>
-    <div class="grid">
-        `+reviewCards+`
-    </div>
-  </div>
-</section>
+`+reviewsSection+`
 
-<section id="faq" class="faq">
-  <div class="container">
-    <h2>Frequently Asked Questions</h2>
-    <div>
-        `+faqItems+`
-    </div>
-  </div>
-</section>
+`+faqSection+`
 
 <section id="booking" class="contact">
   <div class="container">
-    <h2>Visit Us</h2>
+    <h2>`+n(S.visitTitle)+`</h2>
     <iframe src="`+map.embedSrc+`" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="`+n(name)+` location map"></iframe>
     <div class="mapmeta">
       `+(c.address?'<span>\u26f3 '+n(c.address)+'</span>':'')+`
       `+(c.hours?'<span>\u23f0 '+n(c.hours)+'</span>':'')+`
       `+(phone?'<span>\u260e '+n(phone)+'</span>':'')+`
-      <a href="`+map.dirsLink+`" target="_blank" rel="noopener">\u2192 Get Directions</a>
+      <a href="`+map.dirsLink+`" target="_blank" rel="noopener">\u2192 `+n(S.directions)+`</a>
     </div>
     <div style="margin-top:26px"><a class="btn" href="`+ctaHref+`"`+(ctaHref==='#booking'?' onclick="document.getElementById(\'booking\').scrollIntoView()"':'')+`>`+n(cta)+`</a></div>
   </div>
 </section>
 
 <footer>
-  <p>&copy; `+new Date().getFullYear()+` `+n(name)+` `+(city?' \u2014 '+n(city):'')+` · <a href="`+map.dirsLink+`" style="color:#fff">Get Directions</a></p>
+  <p>&copy; `+new Date().getFullYear()+` `+n(name)+` `+(city?' \u2014 '+n(city):'')+` · <a href="`+map.dirsLink+`" style="color:#fff">`+n(S.footDir)+`</a></p>
 </footer>
 
-`+(phoneDigits?'<a class="floating-wa" href="'+waLink+'" target="_blank" rel="noopener" title="Chat on WhatsApp">\u2711</a>':'')+`
+`+(phoneDigits?'<a class="floating-wa" href="'+waLink+'" target="_blank" rel="noopener" title="'+n(S.waTxt)+'">\u2711</a>':'')+`
 
 </body>
 </html>`;
@@ -2619,12 +2707,15 @@ details{margin-bottom:12px}
 }
 
 function buildPackAgents(client, options){
+
   const c = client || {}, o = options || {};
   const name = c.name || 'Client';
   const prof = c.prof || 'clinic';
   const city = c.city || '';
   const lang = o.lang || 'en';
-  const langTxt = lang==='ar' ? 'Arabic (RTL)' : (lang==='fr' ? 'French' : 'English');
+  const langTokens = String(lang).split('_').filter(Boolean);
+  const multiLang = langTokens.length > 1;
+  const buildOrder = multiLang ? '\n- **BUILD ORDER:** 1) complete the FULL deep page in the primary language (' + langTokens[0] + '); 2) THEN add the other languages (' + langTokens.slice(1).join(' + ') + ') with a switcher. One deep page first, never three shallow blocks.' : '';
   return `# Project: ${name} — Landing Page Build
 
 ## Read FIRST
@@ -2635,7 +2726,7 @@ function buildPackAgents(client, options){
 Single self-contained \`index.html\` (inline CSS + JS inside one file). No frameworks, no build step, no external dependencies beyond Google Fonts \`<link>\` (Tajawal for Arabic, Inter otherwise) and the Google Maps embed iframe.
 
 ## Design spec
-- **Language:** ${langTxt}${lang==='ar'?' (dir="rtl")':''}
+- **Language:** ${lang}${langTokens[0]==='ar'?' (dir="rtl")':''}${buildOrder}
 - **Tone:** ${o.tone||'trust'}
 - **Variant:** ${o.variant||'conservative'}
 - **CTA:** ${o.cta||'whatsapp'}
@@ -2688,6 +2779,11 @@ function buildPackContext(client, options, lastPrompts){
     if ((c.insights.strengths||[]).length) lines.push('### Strengths', ...(c.insights.strengths.map(s=>'- '+s)));
     if ((c.insights.concerns||[]).length)  lines.push('### Concerns',  ...(c.insights.concerns.map(s=>'- '+s)));
     if ((c.insights.keywords||[]).length)  lines.push('### SEO keywords', ...(c.insights.keywords.map(s=>'- '+s)));
+    lines.push('');
+  } else {
+    lines.push('## Patient Insights');
+    lines.push('');
+    lines.push('Insights unavailable — agent may draft profession-appropriate EXAMPLE testimonials, clearly marked as examples, consistent with the real rating.');
     lines.push('');
   }
   if (comps.length) {
@@ -2771,6 +2867,39 @@ const PACK_FILES = {
   status:  ['PROJECT_STATUS.md',    'buildPackStatus'],
   handoff: ['HANDOFF.md',            'buildPackHandoff']
 };
+function packHealth(){
+  const c = client || {}, o = options || {};
+  const checks = [];
+  const warn = [];
+  const uspOk = c.selectedUSP && String(c.selectedUSP).trim().length > 3;
+  checks.push(['USP set', uspOk]);
+  if(!uspOk) warn.push('No/weak USP selected — run USP generation');
+  const hasIns = c.insights && ((c.insights.strengths||[]).length || (c.insights.concerns||[]).length);
+  checks.push(['Insights present', !!hasIns]);
+  if(!hasIns) warn.push('No patient insights — Reviews/FAQ sections will be omitted');
+  const catId = detectProfessionId((c.prof||'')+' '+(c.name||''));
+  const rawServices = (SERVICES_HINT[catId] || SERVICES_HINT.medical || '').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+  const deduped = new Set(rawServices).size === rawServices.length;
+  checks.push(['Services deduped', rawServices.length === 0 ? true : deduped]);
+  if(!deduped) warn.push('Duplicate services found — will be deduped in pack');
+  const tokens = String(o.lang||'en').split('_').filter(Boolean);
+  const primOk = ['ar','fr','en'].indexOf(tokens[0]) !== -1;
+  checks.push(['Language consistent', primOk]);
+  if(!primOk) warn.push('Primary language "' + (tokens[0]||'') + '" unsupported — defaulting to en');
+  const phoneOk = !!c.phone;
+  checks.push(['Phone present', phoneOk]);
+  if(!phoneOk) warn.push('No phone — WhatsApp / call CTAs will be weak');
+  const score = checks.filter(x=>x[1]).length;
+  const el = document.getElementById('packHealth');
+  if (el) {
+    const color = score === 5 ? '#4ade80' : (score >= 3 ? '#fbbf24' : '#f87171');
+    el.innerHTML = '<b style="color:' + color + '">Pack health: ' + score + '/5</b>' +
+      (warn.length ? '<br><span style="color:#fbbf24">' + warn.map(w=>'• ' + w).join('<br>') + '</span>' : '');
+  }
+  return { score, checks, warn };
+}
+function refreshPackHealth(){ packHealth(); }
+
 function dlPack(key){
   const f = PACK_FILES[key]; if(!f) return;
   const text = (f[1]==='buildPackIndex'||f[1]==='buildPackAgents')
@@ -2781,7 +2910,8 @@ function dlPack(key){
 }
 function dlPackAll(){
   let i = 0; const keys = Object.keys(PACK_FILES);
-  const step = () => { if (i >= keys.length) { toast('📦 Project pack downloaded (5 files)'); return; } dlPack(keys[i]); i++; setTimeout(step, 300); };
+  const h = packHealth();
+  const step = () => { if (i >= keys.length) { toast('📦 Project pack downloaded (5 files) · Pack health ' + h.score + '/5'); return; } dlPack(keys[i]); i++; setTimeout(step, 300); };
   step();
 }
 function copyHandoff(){

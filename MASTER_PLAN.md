@@ -36,6 +36,7 @@
 | 18b | Project Pack index.html skeleton generator | 15 دقيقة | 100% | ✅ |
 | 18c | Inline prompt editing (Ready-to-use Prompts) | 15 دقيقة | 100% | ✅ |
 | 17b | ☁️ Cloud Sync (Firebase realtime — History + Leads) | 20 دقيقة | 100% | ✅ |
+| 19 | Pack Quality Gates (USP gate, taxonomy+dedupe, no-empty-sections, language consistency, image scenes, pack health) | 30 دقيقة | 100% | ✅ |
 
 ---
 
