@@ -3000,6 +3000,15 @@ function handleDeckShot(which, input) {
 
 function slugify(s) { return String(s||'client').replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40); }
 
+function monogram(name) {
+  const skip = /^(dr|dra|pr|me|centre|center|cabinet|clinic|poly|polyclinique)$/i;
+  const parts = String(name||'').split(/\s+/).filter(w => !skip.test(w) && w.length > 1);
+  return (parts[0]||'')[0] + (parts[1]||parts[0]||'')[0] || 'CL';
+}
+
+const PROF_FR = {dental:'Clinique dentaire',beauty:'Salon de beauté',eye:'Centre ophtalmologique',derma:'Centre dermatologique',physio:'Centre de physiothérapie',pharmacy:'Pharmacie',veterinary:'Clinique vétérinaire',restaurant:'Restaurant',legal:'Cabinet d\'avocat',plastic:'Chirurgie esthétique',medical:'Clinique médicale'};
+const PROF_AR = {dental:'عيادة أسنان',beauty:'صالون تجميل',eye:'عيادة عيون',derma:'عيادة جلدية',physya:'مركز علاج طبيعي',pharmacy:'صيدلية',veterinary:'عيادة بيطري',restaurant:'مطعم',legal:'مكتب محاماة',plastic:'جراحة تجميلية',medical:'عيادة طبية'};
+
 function buildDeck(client, options) {
   const c = client || {}, o = options || {};
   const name = c.name || 'Prospect';
@@ -3010,12 +3019,18 @@ function buildDeck(client, options) {
   const phoneDigits = String(c.phone||'').replace(/\D/g,'');
   const waLink = phoneDigits ? 'https://wa.me/'+phoneDigits : '#';
   const lang = String(o.outreachLang || 'fr');
+  const mono = monogram(name);
+  const catId = detectProfessionId((prof || '') + ' ' + (name || ''));
+  const profLabel = lang === 'ar' ? (PROF_AR[catId] || prof) : lang === 'fr' ? (PROF_FR[catId] || prof) : (CAT_LABEL[catId] || prof);
   const W = {
     fr: {
-      coverSub: prof + (city ? ' · ' + city : ''),
+      coverSub: profLabel + (city ? ' · ' + city : ''),
+      coverTitle: 'Présence en ligne',
       coverFooter: 'Préparé par AdsFusion',
       assetLine: 'Vos patients vous font déjà confiance.',
-      gapTitle: 'Mais aucun site officiel quand on cherche ' + prof + ' ' + city,
+      reviewsLabel: 'avis',
+      featureTitle: 'Ce que ça fait',
+      gapTitle: 'Mais aucun site officiel quand on cherche ' + profLabel + ' ' + city,
       gapConsequence: 'Les patients finissent chez les concurrents visibles.',
       solutionCaption: 'Votre future page',
       ticks: [
@@ -3039,13 +3054,20 @@ function buildDeck(client, options) {
       step2: 'Mise en ligne sous 48h',
       step3: 'Recevoir les demandes sur WhatsApp',
       cta: 'Envoyez-nous votre devis maintenant',
-      brandFooter: 'AdsFusion — WhatsApp: +212 669-350062'
+      brandFooter: 'AdsFusion — WhatsApp: +212 669-350062',
+      compRowHighlight: 'Votre ligne est en surbrillance — vous gagnez sur la confiance',
+      placeholderDesktop: 'Capture desktop',
+      placeholderMobile: 'Capture mobile',
+      compThBusiness: 'Business'
     },
     en: {
-      coverSub: prof + (city ? ' · ' + city : ''),
+      coverSub: profLabel + (city ? ' · ' + city : ''),
+      coverTitle: 'Online Presence',
       coverFooter: 'Prepared by AdsFusion',
       assetLine: 'Your patients already trust you.',
-      gapTitle: 'But there is no official site when searching ' + prof + ' ' + city,
+      reviewsLabel: 'reviews',
+      featureTitle: 'What it does',
+      gapTitle: 'But there is no official site when searching ' + profLabel + ' ' + city,
       gapConsequence: 'Patients end up with visible competitors instead.',
       solutionCaption: 'Your future landing page',
       ticks: [
@@ -3069,13 +3091,20 @@ function buildDeck(client, options) {
       step2: 'Go live within 48h',
       step3: 'Receive requests via WhatsApp',
       cta: 'Send us your proposal now',
-      brandFooter: 'AdsFusion — WhatsApp: +212 669-350062'
+      brandFooter: 'AdsFusion — WhatsApp: +212 669-350062',
+      compRowHighlight: 'Your row is highlighted — you win on trust',
+      placeholderDesktop: 'Desktop screenshot',
+      placeholderMobile: 'Mobile screenshot',
+      compThBusiness: 'Business'
     },
     ar: {
-      coverSub: prof + (city ? ' · ' + city : ''),
+      coverSub: profLabel + (city ? ' · ' + city : ''),
+      coverTitle: 'الpresence الرقمية',
       coverFooter: 'من إعداد AdsFusion',
       assetLine: 'مرضاك يثقون بك بالفعل.',
-      gapTitle: 'ولكن لا يوجد موقع رسمي عند البحث عن ' + prof + ' ' + city,
+      reviewsLabel: 'تقييم',
+      featureTitle: 'ماذا يقدم',
+      gapTitle: 'ولكن لا يوجد موقع رسمي عند البحث عن ' + profLabel + ' ' + city,
       gapConsequence: 'المرضى يذهبون إلى المنافسين الظاهرين بدلاً من ذلك.',
       solutionCaption: 'صفحتك المستقبلية',
       ticks: [
@@ -3099,7 +3128,11 @@ function buildDeck(client, options) {
       step2: 'النشر خلال 48 ساعة',
       step3: 'استقبال الطلبات عبر واتساب',
       cta: 'أرسل لنا عرضك الآن',
-      brandFooter: 'AdsFusion — واتساب: +212 669-350062'
+      brandFooter: 'AdsFusion — واتساب: +212 669-350062',
+      compRowHighlight: 'صفك مميز — تفوز بالثقة',
+      placeholderDesktop: 'صورة سطح المكتب',
+      placeholderMobile: 'صورة الهاتف',
+      compThBusiness: 'المهنة'
     }
   }[lang] || W.fr;
 
@@ -3110,19 +3143,19 @@ function buildDeck(client, options) {
   if (deckShots.desktop) {
     desktopFrame = '<div class="laptop-frame"><img src="'+deckShots.desktop+'" alt="Desktop preview"></div><div class="laptop-base"></div>';
   } else {
-    desktopFrame = '<div class="laptop-frame"><div class="shot-placeholder">📷<br>Desktop screenshot</div></div><div class="laptop-base"></div>';
+    desktopFrame = '<div class="laptop-frame"><div class="shot-placeholder">${mono}</div></div><div class="laptop-base"></div>';
   }
   let mobileFrame = '';
   if (deckShots.mobile) {
     mobileFrame = '<div class="phone-frame"><img src="'+deckShots.mobile+'" alt="Mobile preview"></div>';
   } else {
-    mobileFrame = '<div class="phone-frame"><div class="shot-placeholder">📷<br>Mobile</div></div>';
+    mobileFrame = '<div class="phone-frame"><div class="shot-placeholder">${mono}</div></div>';
   }
 
   const compRows = hasComps
     ? [
-        '<tr class="highlight"><td><b>'+esc(c.name)+' ⭐</b></td><td>'+esc(c.rating||'—')+'</td><td>'+esc(c.website_url?'✅ Yes':'❌ No')+'</td><td>'+esc(phoneDigits?'✅ Yes':'❌ No')+'</td></tr>',
-        ...comps.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.rating||'—')}</td><td>${esc(x.website?'✅ Yes':'❌ No')}</td><td>${esc('—')}</td></tr>`)
+        '<tr class="highlight"><td><b>'+esc(c.name)+' ⭐</b></td><td>'+esc(c.rating||'—')+'</td><td>'+esc(c.website_url?esc(W.compYes):esc(W.compNo))+'</td><td>'+esc(phoneDigits?esc(W.compYes):esc(W.compNo))+'</td></tr>',
+        ...comps.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.rating||'—')}</td><td>${esc(x.website?esc(W.compYes):esc(W.compNo))}</td><td>${esc(W.compNA||'—')}</td></tr>`)
       ].join('\n          ')
     : '';
 
@@ -3130,12 +3163,12 @@ function buildDeck(client, options) {
   <section class="dslide">
     <h2><span class="gold">${esc(W.compHeader)}</span></h2>
     <table>
-      <thead><tr><th>Business</th><th>${esc(W.compNote)}</th><th>${esc(W.compSite)}</th><th>${esc(W.compBook)}</th></tr></thead>
+      <thead><tr><th>${esc(W.compThBusiness)}</th><th>${esc(W.compNote)}</th><th>${esc(W.compSite)}</th><th>${esc(W.compBook)}</th></tr></thead>
       <tbody>
           ${compRows}
       </tbody>
     </table>
-    <div class="sub-line" style="margin-top:14px; color:#c9a227">✅ Your row is highlighted — you win on trust, they win on visibility</div>
+    <div class="sub-line" style="margin-top:14px; color:#c9a227">${esc(W.compRowHighlight)}</div>
   </section>` : '';
 
   const html = `<!DOCTYPE html>
@@ -3195,10 +3228,12 @@ html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif
 .tap-right{position:fixed; right:0; top:0; width:30%; height:100%; z-index:105; cursor:pointer}
 @media print{
   html,body{overflow:auto!important}
-  .slide{height:auto!important; min-height:100vh; page-break-after:always; display:block!important; padding:40px}
-  .nav-btn,.dot-nav,.close-btn,.tap-left,.tap-right{display:none!important}
+  body{background:#fff!important; color:#000!important}
+  .slide{position:static!important; height:auto!important; min-height:100vh; page-break-after:always; display:block!important; padding:40px; transform:none!important; opacity:1!important}
+  .nav-btn,.dot-nav,.close-btn,.tap-left,.tap-right,.deck-overlay .slide{transform:none!important; opacity:1!important}
   .slide:last-child{page-break-after:auto}
 }
+.deck-open body{position:fixed; inset:0; overflow:hidden; background:var(--bg)}
 @media(max-width:640px){.slide{padding:30px 16px}.slide .devices-row{flex-direction:column; align-items:center}}
 </style>
 </head>
@@ -3214,7 +3249,7 @@ html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif
   <div id="deckBody">
   <!-- 1 COVER -->
   <section class="slide">
-    <h1><span class="gold">Présence en ligne</span><br>${esc(name)}</h1>
+    <h1><span class="gold">${esc(W.coverTitle)}</span><br>${esc(name)}</h1>
     <p style="font-size:clamp(16px,2vw,22px); margin-top:8px">${esc(W.coverSub)}</p>
     <div class="sub-line" style="margin-top:18px">${esc(W.coverFooter)}</div>
   </section>
@@ -3222,7 +3257,7 @@ html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif
   <!-- 2 HIDDEN ASSET -->
   <section class="slide">
     <div class="rating-big">${esc(rating)}⭐</div>
-    <p style="font-size:clamp(18px,2.5vw,28px); margin-top:12px; font-weight:600">${esc(reviews)} avis</p>
+    <p style="font-size:clamp(18px,2.5vw,28px); margin-top:12px; font-weight:600">${esc(reviews)} ${esc(W.reviewsLabel)}</p>
     <p style="margin-top:20px; opacity:.7">${esc(W.assetLine)}</p>
   </section>
 
@@ -3244,7 +3279,7 @@ html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif
 
   <!-- 5 WHAT IT DOES -->
   <section class="slide">
-    <h2><span class="gold">Ce que ça fait</span></h2>
+    <h2><span class="gold">${esc(W.featureTitle)}</span></h2>
     <ul class="ticks" style="margin-top:24px">
       ${W.ticks.map(t=>'<li>'+esc(t)+'</li>').join('\n      ')}
     </ul>
@@ -3290,7 +3325,7 @@ html,body{background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif
   }
   window.prevSlide=function(){ go(cur-1); };
   window.nextSlide=function(){ go(cur+1); };
-  window.closeDeck=function(){ const o=document.getElementById('deckOverlay'); if(o) o.remove(); };
+  window.closeDeck=function(){ document.body.classList.remove('deck-open'); const o=document.getElementById('deckOverlay'); if(o) o.remove(); };
   document.addEventListener('keydown',e=>{
     if(e.key==='ArrowRight'||e.key===' ') window.nextSlide();
     if(e.key==='ArrowLeft') window.prevSlide();
@@ -3315,6 +3350,7 @@ function previewDeck() {
   const html = buildDeck(client, options);
   const blob = new Blob([html], {type: 'text/html'});
   const url = URL.createObjectURL(blob);
+  document.body.classList.add('deck-open');
   window.open(url, '_blank');
 }
 
