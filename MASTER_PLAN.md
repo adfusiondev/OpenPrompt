@@ -4,7 +4,7 @@
 **المشروع:** OpenPrompt (App.OpenPrompt)
 **الرابط الحي:** https://open-prompt-three.vercel.app
 **الغرض:** أداة شخصية لتسريع وتطوير عمل تصميم صفحات الهبوط للعملاء المستهدفين
-**آخر تحديث:** المرحلة الحالية = P0
+**آخر تحديث:** المرحلة الحالية = P0 | 2026-09-03 | Stage 20 ✅
 
 ---
 
@@ -37,6 +37,7 @@
 | 18c | Inline prompt editing (Ready-to-use Prompts) | 15 دقيقة | 100% | ✅ |
 | 17b | ☁️ Cloud Sync (Firebase realtime — History + Leads) | 20 دقيقة | 100% | ✅ |
 | 19 | Pack Quality Gates (USP gate, taxonomy+dedupe, no-empty-sections, language consistency, image scenes, pack health) | 30 دقيقة | 100% | ✅ |
+| 20 | Proposal Deck Generator (7-slide sales presentation with screenshots, fullscreen nav, PDF) | 30 دقيقة | 100% | ✅ |
 
 ---
 

@@ -159,6 +159,7 @@
 - يُحفظ في History ويُستعاد تلقائيًا
 - **Per-row outreach actions**: 📲 WhatsApp | 📊 +Leads | ⧉ Outreach (from History)
 - **📥 Import Leads**: CSV template → upload → entries tagged "imported" in History
+- **📊 Proposal Deck**: 7-slide HTML sales presentation generator — auto-pulls client data, accepts desktop/mobile screenshots, fullscreen navigation with keyboard/touch/dots, dark ink + champagne gold premium theme, one-slide-per-page PDF support
 - **🔐 Access Lock** (optional): session-based password lock managed from Settings
 - **Clean History**: explicit Save/Discard at Results + Back navigation
 - **🐞 Diagnostic Reporter**: one-click copyable bug report with errors, pipeline log & masked keys — paste to your developer/AI for fast fixes
