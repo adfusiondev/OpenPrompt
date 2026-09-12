@@ -2201,6 +2201,27 @@ function buildPrompts(){
     ].filter(Boolean);
     if (lines.length) INSIGHTS = 'PATIENT INSIGHTS TO USE:\n' + lines.join('\n');
   }
+  let COMPETITIVE = '';
+  if (client.competitors && client.competitors.length) {
+    const compLines = client.competitors.map((c,i) => `${i+1}. ${c.name} — ${c.rating||'—'}⭐ (${c.reviews||'0'} reviews)${c.website ? ' • has website' : ' • no website'}`).join('\n');
+    let gapText = '';
+    if (client.gapAnalysis) {
+      const g = client.gapAnalysis;
+      const strengths = (g.strengths||[]).length ? '✓ Strengths: ' + g.strengths.join('; ') : '';
+      const gaps = (g.gaps||[]).length ? '⚠ Gaps: ' + g.gaps.join('; ') : '';
+      const opps = (g.opportunities||[]).length ? '🎯 Opportunities: ' + g.opportunities.join('; ') : '';
+      gapText = [strengths, gaps, opps].filter(Boolean).join('\n');
+    }
+    COMPETITIVE = `COMPETITIVE LANDSCAPE:
+
+* Your position: ${client.name} — ${client.rating||'—'}⭐ (${client.reviews||'?'} reviews)
+* Top competitors:
+${compLines}
+
+GAP ANALYSIS:
+${gapText || '(no gap analysis available)'}
+DESIGN IMPLICATION: Build a page that highlights YOUR strengths and addresses the gaps. For example, if competitors have more reviews, add prominent social proof; if they lack specific services, emphasize those services in your hero section.`;
+  }
   const _briefLang = (options.lang||'en')[0]==='f' ? 'fr' : (options.lang||'en')[0]==='a' ? 'ar' : 'en';
   const _tierKey = options.variant in TIER_BRIEFS[_briefLang] ? options.variant : 'conservative';
   const _brief = TIER_BRIEFS[_briefLang][_tierKey];
@@ -2232,7 +2253,7 @@ LOCATION DATA (use exactly):
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
-VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
+VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}${COMPETITIVE ? '\n\n' + COMPETITIVE : ''}
 
 QUALITY TIER — CREATIVE DIRECTION:
 ${TIER}
