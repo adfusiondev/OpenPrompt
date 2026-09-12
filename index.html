@@ -310,9 +310,9 @@ pre.prompt[contenteditable="true"]{outline:none}
 
       <div><label>Design variant</label>
         <div class="seg" id="variantSeg">
-          <button class="active" onclick="setVariant('conservative',this)">🛡 Conservative</button>
-          <button onclick="setVariant('bold',this)">⚡ Bold</button>
-          <button onclick="setVariant('premium',this)">💎 Premium</button>
+          <button class="active" onclick="setVariant('conservative',this)">🥉 Basic</button>
+          <button onclick="setVariant('bold',this)">🥈 Standard</button>
+          <button onclick="setVariant('premium',this)">🥇 VIP</button>
         </div></div>
     </div>
     <div class="row">
@@ -1987,6 +1987,137 @@ const VARIANT_DIRECTIVES = {
   bold: 'DESIGN VARIANT: Bold — maximize conversion with punchy hooks and high-contrast visual cues. Use large hero sections, vibrant accent colors, dynamic hover effects, and urgency-driven layout. Copywriting should be direct, action-oriented, and benefit-focused. Lead with results, use strong verbs, create FOMO with limited-time offers. CTA buttons should be prominent and repeated strategically.',
   premium: 'DESIGN VARIANT: Premium — luxury boutique feel with minimalist elegance and exclusivity. Use restrained color palette (black/white/gold accents), generous whitespace, elegant serif or thin sans-serif typography. Copywriting should be refined, understated, and aspirational. Emphasize bespoke experience, privacy, white-glove service. Layout should feel curated, not crowded — every element earns its space.'
 };
+// Quality tiers → descriptive creative-direction briefs (feel + direction, not a spec).
+// Internal keys stay conservative/bold/premium for History backward-compat.
+const TIER_BRIEFS = {
+  fr: {
+    conservative: {
+      title: "Landing page propre et fonctionnelle",
+      brief: `Crée une landing page claire et fonctionnelle pour [NOM],
+[PROFESSION] à [VILLE].
+
+Priorité: information claire, navigation simple, conversion rapide.
+Ton: professionnel, direct, sans fioritures.
+Structure: Hero avec note Google + services + contact + WhatsApp.
+CTA principal: réservation WhatsApp en 1 clic.
+
+Donne-moi un design efficace et crédible — pas besoin de fioritures,
+juste une page qui fonctionne parfaitement et inspire confiance.`
+    },
+    bold: {
+      title: "Landing page moderne et professionnelle",
+      brief: `Crée une landing page moderne et équilibrée pour [NOM],
+[PROFESSION] à [VILLE].
+
+Priorité: identité visuelle forte, UX soignée, conversion optimisée.
+Ton: contemporain, engageant, professionnel avec personnalité.
+Structure: Hero impactant + services avec bénéfices + témoignages +
+FAQ + carte live + CTA WhatsApp.
+CTA principal: réservation WhatsApp en 1 clic.
+
+Surprends-moi avec un design moderne qui se démarque — tu as liberté
+créative sur la palette, la typo et la mise en page.`
+    },
+    premium: {
+      title: "Landing page premium et immersive",
+      brief: `Crée une landing page d'exception pour [NOM], [PROFESSION]
+à [VILLE] — niveau flagship clinic.
+
+Priorité: storytelling visuel, détails raffinés, expérience immersive.
+Ton: exclusif, éditorial, luxe discret (pas criard).
+Structure: Hero cinématique + parcours patient + services signature +
+galerie + témoignages + FAQ premium + carte + CTA VIP.
+CTA principal: réservation WhatsApp en 1 clic.
+
+Liberté totale: palette sophistiquée, typographie éditoriale, animations
+subtiles, micro-interactions. Je veux un résultat digne d'une clinique
+parisienne haut de gamme.`
+    }
+  },
+  en: {
+    conservative: {
+      title: "Clean and functional landing page",
+      brief: `Create a clean, functional landing page for [NAME], a [PROFESSION] in [CITY].
+
+Priority: clear information, simple navigation, fast conversion.
+Tone: professional, direct, no frills.
+Structure: hero with Google rating + services + contact + WhatsApp.
+Main CTA: one-click WhatsApp booking.
+
+Give me an effective, credible design — no frills needed, just a page
+that works perfectly and inspires trust.`
+    },
+    bold: {
+      title: "Modern and professional landing page",
+      brief: `Create a modern, balanced landing page for [NAME], a [PROFESSION] in [CITY].
+
+Priority: strong visual identity, polished UX, optimized conversion.
+Tone: contemporary, engaging, professional with personality.
+Structure: impactful hero + services with benefits + testimonials +
+FAQ + live map + WhatsApp CTA.
+Main CTA: one-click WhatsApp booking.
+
+Surprise me with a modern design that stands out — you have creative
+freedom on palette, typography, and layout.`
+    },
+    premium: {
+      title: "Premium and immersive landing page",
+      brief: `Create an exceptional landing page for [NAME], a [PROFESSION]
+in [CITY] — flagship clinic level.
+
+Priority: visual storytelling, refined details, immersive experience.
+Tone: exclusive, editorial, discreet luxury (not flashy).
+Structure: cinematic hero + patient journey + signature services +
+gallery + testimonials + premium FAQ + map + VIP CTA.
+Main CTA: one-click WhatsApp booking.
+
+Total freedom: sophisticated palette, editorial typography, subtle
+animations, micro-interactions. I want a result worthy of a
+high-end flagship clinic.`
+    }
+  },
+  ar: {
+    conservative: {
+      title: "صفحة هبوط نظيفة ووظيفية",
+      brief: `أنشئ صفحة هبوط واضحة ووظيفية لـ [الاسم]، [المهنة] في [المدينة].
+
+الأولوية: معلومات واضحة، تنقّل بسيط، تحويل سريع.
+النبرة: احترافية، مباشرة، بلا زوائد.
+البنية: قسم رئيسي مع تقييم غوغل + الخدمات + الاتصال + واتساب.
+الزر الرئيسي: حجز واتساب بنقرة واحدة.
+
+أعطني تصميمًا فعالًا وموثوقًا — لا حاجة للزوائد، فقط صفحة تعمل
+بشكل مثالي وتُلهم الثقة.`
+    },
+    bold: {
+      title: "صفحة هبوط حديثة واحترافية",
+      brief: `أنشئ صفحة هبوط حديثة ومتوازنة لـ [الاسم]، [المهنة] في [المدينة].
+
+الأولوية: هوية بصرية قوية، تجربة مستخدم مصقولة، تحويل مُحسَّن.
+النبرة: معاصرة، جذابة، احترافية مع شخصية.
+البنية: قسم رئيسي مؤثر + خدمات مع الفوائد + آراء العملاء +
+أسئلة شائعة + خريطة حية + زر واتساب.
+الزر الرئيسي: حجز واتساب بنقرة واحدة.
+
+فاجئني بتصميم حديث يلفت النظر — لديك حرية إبداعية في الألوان
+والخطوط والتنسيق.`
+    },
+    premium: {
+      title: "صفحة هبوط فاخرة وغامرة",
+      brief: `أنشئ صفحة هبوط استثنائية لـ [الاسم]، [المهنة] في [المدينة]
+— بمستوى عيادات النخبة.
+
+الأولوية: سرد بصري، تفاصيل راقية، تجربة غامرة.
+النبرة: حصرية، تحريرية، فخامة هادئة (ليست صاخبة).
+البنية: قسم رئيسي سينمائي + رحلة المريض + خدمات مميزة + معرض +
+آراء + أسئلة شائعة راقية + خريطة + زر VIP.
+الزر الرئيسي: حجز واتساب بنقرة واحدة.
+
+حرية تامة: لوحة ألوان راقية، خطوط تحريرية، حركات دقيقة،
+تفاعلات دقيقة. أريد نتيجة تليق بعيادة فاخرة.`
+    }
+  }
+};
 function setVariant(v, btn){
   options.variant = v;
   document.querySelectorAll('#variantSeg button').forEach(b => b.classList.remove('active'));
@@ -2040,6 +2171,15 @@ function buildPrompts(){
     ].filter(Boolean);
     if (lines.length) INSIGHTS = 'PATIENT INSIGHTS TO USE:\n' + lines.join('\n');
   }
+  const _briefLang = (options.lang||'en')[0]==='f' ? 'fr' : (options.lang||'en')[0]==='a' ? 'ar' : 'en';
+  const _tierKey = options.variant in TIER_BRIEFS[_briefLang] ? options.variant : 'conservative';
+  const _brief = TIER_BRIEFS[_briefLang][_tierKey];
+  const TIER = `${_brief.title}
+
+${_brief.brief
+  .replace(/\[NOM\]|\[NAME\]|\[الاسم\]/g, client.name||'[NAME]')
+  .replace(/\[PROFESSION\]|\[المهنة\]/g, client.prof||'[PROFESSION]')
+  .replace(/\[VILLE\]|\[CITY\]|\[المدينة\]/g, client.city||'[CITY]')}`;
 
   const landing=`You are a senior web designer specializing in medical landing pages. Build a complete page:
 
@@ -2062,10 +2202,12 @@ LOCATION DATA (use exactly):
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
 PRIMARY CTA: ${CTA}.
-VISUAL TONE: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
+VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''}
 
-SECTIONS (in order): Hero + trust bar + services (suggest: ${servicesHint}) + about + reviews + FAQ + location (Embed a LIVE Google Map using the embed src above (keyless iframe), and add a prominent 'Get Directions' button linking to the directions link. Do NOT use a placeholder map.) + footer.
-TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast.
+QUALITY TIER — CREATIVE DIRECTION:
+${TIER}
+
+TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast. Services to feature (suggest): ${servicesHint}. Embed a LIVE Google Map using the embed src above (keyless iframe), with a prominent 'Get Directions' button linking to the directions link — do NOT use a placeholder map.
 OUTPUT: single self-contained HTML/CSS/JS file.${BUILD_ORDER}`;
 
   const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}
