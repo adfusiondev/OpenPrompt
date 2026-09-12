@@ -2214,6 +2214,8 @@ function renderHistory(){
     : `<p class="sub">${q ? 'No clients match your search.' : 'No saved clients yet.'}</p>`;
 }
 function openItem(id){
+  deckShots = {desktop:'', mobile:''};
+  document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has'));
   const x=getHist().find(v=>v.id===id); if(!x) return;
   client=x.client; options=x.options; lastPrompts=x.prompts; currentId=id;
   sessionGenerated = true; sessionSaved = true;
@@ -2241,8 +2243,8 @@ function delItem(id){
 const aiImprove=lockGate(_aiImproveOrig);
 function updateSaveBtn(){const b=$('#saveClientBtn'); if(!b) return; b.textContent=sessionSaved?'✓ Saved (update)':'💾 Save client';}
 function saveClient(){ saveOrUpdate(); sessionSaved = true; updateSaveBtn(); toast('Client saved to History'); }
-function discardClient(){ if(sessionSaved){ go(0); toast('Closed - client remains in History'); } else { currentId=null; sessionGenerated=false; sessionSaved=false; go(0); toast('Discarded - not saved'); } }
-function newClient(){ if(sessionGenerated && !sessionSaved){ if(!confirm('This client was generated but NOT saved. Discard it?')) return; } currentId=null; sessionGenerated=false; sessionSaved=false; updateSaveBtn(); go(0); }
+function discardClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); if(sessionSaved){ go(0); toast('Closed - client remains in History'); } else { currentId=null; sessionGenerated=false; sessionSaved=false; go(0); toast('Discarded - not saved'); } }
+function newClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); if(sessionGenerated && !sessionSaved){ if(!confirm('This client was generated but NOT saved. Discard it?')) return; } currentId=null; sessionGenerated=false; sessionSaved=false; updateSaveBtn(); go(0); }
 function _exportAllOrig(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
 const exportAll=lockGate(_exportAllOrig);
 
