@@ -2391,12 +2391,27 @@ function getHist(){ return JSON.parse(localStorage.getItem(LS_H)||'[]'); }
 function saveOrUpdate(){
   const h=getHist();
   const ts=new Date().toISOString().replace('T',' ').slice(0,16);
+  // ── Persist EVERYTHING ──
+  const fullClient = {...client,
+    name: client.name, prof: client.prof, city: client.city,
+    phone: (client.phone||'').replace(/\D/g,''), address: client.address||'',
+    rating: client.rating||'', reviews: client.reviews||'',
+    website_url: client.website_url||'', hours: client.hours||'',
+    notes: client.notes||'', website: client.website||'no', identity: client.identity||'no',
+    lat: client.lat, lng: client.lng, rawUrl: client.rawUrl||'',
+    source: client.source || 'extracted',
+    // AI / analysis content
+    usps: client.usps||null, selectedUSP: client.selectedUSP||null,
+    insights: client.insights||null,
+    competitors: client.competitors||null,
+    gapAnalysis: client.gapAnalysis||null
+  };
   if(currentId){
     const i=h.findIndex(x=>x.id===currentId);
-    if(i>=0){ h[i]={id:currentId, ts, client, options, prompts:lastPrompts}; }
-    else{ const item={id:Date.now(), ts, client, options, prompts:lastPrompts}; h.unshift(item); currentId=item.id; }
+    if(i>=0){ h[i]={id:currentId, ts, client:fullClient, options, prompts:lastPrompts}; }
+    else{ const item={id:Date.now(), ts, client:fullClient, options, prompts:lastPrompts}; h.unshift(item); currentId=item.id; }
   } else {
-    const item={id:Date.now(), ts, client, options, prompts:lastPrompts};
+    const item={id:Date.now(), ts, client:fullClient, options, prompts:lastPrompts};
     h.unshift(item); currentId=item.id;
   }
   try { localStorage.setItem(LS_H, JSON.stringify(h)); }
@@ -2436,9 +2451,12 @@ function openItem(id){
   $('#f_website_url').value=client.website_url||''; $('#f_hours').value=client.hours||'';
   $('#o_lang').value=options.lang||'en'; $('#o_cta').value=options.cta||'whatsapp'; $('#o_tone').value=options.tone||'trust';
   $('#o_outreachLang').value=options.outreachLang||'en';
-  const v=(options.variant||'conservative'); setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
+  const v=(options.variant||'conservative');
+  setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
+  // Restore cards AFTER setting fields so cards have content to render
   renderUSPCard();
   renderInsightsCard();
+  if(client.competitors && client.competitors.length){ renderCompetitorsCard(client); renderGapAnalysis(client); }
   if (client.source === 'data-only' || client.source === 'analysis-only') {
     go(1);
   } else {
