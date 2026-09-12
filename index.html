@@ -310,9 +310,9 @@ pre.prompt[contenteditable="true"]{outline:none}
 
       <div><label>Design variant</label>
         <div class="seg" id="variantSeg">
-          <button class="active" onclick="setVariant('conservative',this)">🥉 Basic</button>
-          <button onclick="setVariant('bold',this)">🥈 Standard</button>
-          <button onclick="setVariant('premium',this)">🥇 VIP</button>
+          <button class="active" onclick="setVariant('conservative',this,true)">🥉 Basic</button>
+          <button onclick="setVariant('bold',this,true)">🥈 Standard</button>
+          <button onclick="setVariant('premium',this,true)">🥇 VIP</button>
         </div></div>
     </div>
     <div class="row">
@@ -1494,6 +1494,21 @@ function renderGapAnalysis(c){
   box.appendChild(div);
 }
 
+function hideAICards(){
+  ['uspCard','insightsCard','competitorsCard'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+}
+function clearAIContent(){
+  client.insights = null;
+  client.usps = null;
+  client.selectedUSP = null;
+  client.competitors = null;
+  client.gapAnalysis = null;
+  hideAICards();
+}
+
 /* ── Outreach Builder (unified AR/EN/FR with competitor data) ── */
 function buildOutreach(c, opts){
   try {
@@ -1659,7 +1674,8 @@ function mergeData(existing, newData){
   if (!newData) return existing;
   const merged = {...existing};
   Object.keys(newData).forEach(k => {
-    const v = newData[k];
+    let v = newData[k];
+    if (k === 'phone') v = sanitizePhone(v);
     if (v !== null && v !== undefined && String(v).trim() !== '') merged[k] = v;
   });
   return merged;
@@ -1681,6 +1697,7 @@ async function _analyzeOrig(){
   $('#nextRow').classList.add('hidden');
   $('#uspCard').classList.add('hidden');
   $('#insightsCard').classList.add('hidden');
+  $('#competitorsCard').classList.add('hidden');
   const st = $('#analyzeStatus');
   st.textContent = ''; st.className = 'status';
 
@@ -1935,6 +1952,7 @@ function renderProspectResults(places){
 
 function useProspect(btn){
   currentId = null; sessionGenerated = false; sessionSaved = false;
+  hideAICards();
   const p = JSON.parse(btn.getAttribute('data-place'));
   const city = btn.getAttribute('data-city') || '';
 
@@ -1946,7 +1964,7 @@ function useProspect(btn){
     name: parsed.name || p.title || '',
     prof: parsed.prof || p.type || '',
     city: parsed.city || city,
-    phone: parsed.phone || p.phone || '',
+    phone: sanitizePhone(parsed.phone || p.phone || ''),
     address: parsed.address || p.address || '',
     rating: parsed.rating || (p.rating ? String(p.rating) : ''),
     reviews: parsed.reviews || (p.reviews ? String(p.reviews) : ''),
@@ -2118,15 +2136,27 @@ high-end flagship clinic.`
     }
   }
 };
-function setVariant(v, btn){
+function setVariant(v, btn, syncTone){
   options.variant = v;
   document.querySelectorAll('#variantSeg button').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  if (syncTone){
+    const toneMap = { conservative:'trust', bold:'modern', premium:'luxury' };
+    const t = toneMap[v];
+    options.tone = t;
+    const sel = $('#o_tone');
+    if (sel) sel.value = t;
+    const label = {trust:'Trusted & clinical', modern:'Modern & tech-forward', luxury:'Luxury & premium'}[t];
+    toast('🎨 Tone synced: ' + label);
+  }
 }
 
 function collect(){
-  client.name=$('#f_name').value.trim(); client.prof=$('#f_prof').value.trim();
-  client.city=$('#f_city').value.trim(); client.phone=$('#f_phone').value.trim();
+  const fName=$('#f_name').value.trim(), fProf=$('#f_prof').value.trim(), fCity=$('#f_city').value.trim();
+  const sep = '';
+  if ((fName+sep+fProf+sep+fCity) !== (client.name||'')+sep+(client.prof||'')+sep+(client.city||'')) clearAIContent();
+  client.name=fName; client.prof=fProf; client.city=fCity;
+  client.phone=sanitizePhone($('#f_phone').value);
   client.rating=$('#f_rating').value.trim(); client.reviews=$('#f_reviews').value.trim();
   client.address=$('#f_address').value.trim(); client.notes=$('#f_notes').value.trim();
   client.website=$('#f_website').value; client.identity=$('#f_identity').value;
@@ -2385,8 +2415,8 @@ function delItem(id){
 const aiImprove=lockGate(_aiImproveOrig);
 function updateSaveBtn(){const b=$('#saveClientBtn'); if(!b) return; b.textContent=sessionSaved?'✓ Saved (update)':'💾 Save client';}
 function saveClient(){ saveOrUpdate(); sessionSaved = true; updateSaveBtn(); toast('Client saved to History'); }
-function discardClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); if(sessionSaved){ go(0); toast('Closed - client remains in History'); } else { currentId=null; sessionGenerated=false; sessionSaved=false; go(0); toast('Discarded - not saved'); } }
-function newClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); if(sessionGenerated && !sessionSaved){ if(!confirm('This client was generated but NOT saved. Discard it?')) return; } currentId=null; sessionGenerated=false; sessionSaved=false; updateSaveBtn(); go(0); }
+function discardClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); clearAIContent(); if(sessionSaved){ go(0); toast('Closed - client remains in History'); } else { currentId=null; sessionGenerated=false; sessionSaved=false; go(0); toast('Discarded - not saved'); } }
+function newClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); if(sessionGenerated && !sessionSaved){ if(!confirm('This client was generated but NOT saved. Discard it?')) return; } clearAIContent(); currentId=null; sessionGenerated=false; sessionSaved=false; updateSaveBtn(); go(0); }
 function _exportAllOrig(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
 const exportAll=lockGate(_exportAllOrig);
 
@@ -2524,6 +2554,12 @@ function openWhatsApp(phone, message){
   const ol=(options.outreachLang||'').slice(0,2);
   const cl=(client.city||'').match(/\u0627\u0644\u0631\u064a\u0627\u0636|\u062f\u0628\u064a|\u0627\u0644\u0645\u0646\u0627\u0645\u0629|\u0627\u0644\u0643\u0648\u064a\u062a|\u0627\u0644\u0623\u0631\u062f\u0646/);
   if(cl && ol!=='ar') toast('Tip: message is in '+ol.toUpperCase()+' — switch outreach language if needed');
+}
+function sanitizePhone(v){
+  const s = (v === null || v === undefined) ? '' : String(v);
+  if (s.indexOf('.') !== -1 || s.indexOf(',') !== -1) return '';
+  const digits = s.replace(/\D/g, '');
+  return (digits.length >= 7 && digits.length <= 15) ? digits : '';
 }
 function normalizePhone(phone){
   let d=phone.replace(/\D/g,'');
