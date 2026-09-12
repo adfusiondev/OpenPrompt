@@ -253,21 +253,28 @@ pre.prompt[contenteditable="true"]{outline:none}
     <label>Notes / strengths (optional)</label>
     <textarea id="f_notes" rows="2" placeholder="e.g. 15 years of experience, modern laser equipment..."></textarea>
     <div id="uspCard" class="hidden" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
-      <label style="color:var(--ok); font-weight:600; margin:0">🎯 Select a USP:</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px 0"><label style="color:var(--ok); font-weight:600; margin:0">🎯 Select a USP:</label><div style="display:flex; gap:6px"><button class="btn ghost small" onclick="editUSP()">✏️ Edit</button><button class="btn ghost small" onclick="copyUSP()">⧉ Copy</button></div></div>
       <div id="uspOptions"></div>
     </div>
     <div id="insightsCard" class="hidden" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
-      <label style="color:var(--info); font-weight:600; margin:0">💬 Patient Insights:</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px 0"><label style="color:var(--info); font-weight:600; margin:0">💬 Patient Insights:</label><div style="display:flex; gap:6px"><button class="btn ghost small" onclick="editInsights()">✏️ Edit</button><button class="btn ghost small" onclick="copyInsights()">⧉ Copy</button></div></div>
       <div id="insightsContent"></div>
     </div>
     <div id="competitorsCard" class="hidden" style="margin-top:16px; padding:14px; background:#0a0a09; border:1px solid var(--border); border-radius:6px">
-      <label style="color:#a78bfa; font-weight:600">⚔️ Competitor Gap Analysis</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px 0">
+        <label style="color:#a78bfa; font-weight:600; margin:0">⚔️ Competitor Gap Analysis</label>
+        <div style="display:flex; gap:6px"><button class="btn ghost small" onclick="editGap()">✏️ Edit</button><button class="btn ghost small" onclick="copyGap()">⧉ Copy</button></div>
+      </div>
       <div id="competitorsContent" style="margin-top:10px"></div>
     </div>
     <div class="row">
       <button class="btn" onclick="go(2)">Next: Options →</button>
       <button class="btn ghost" onclick="addLead()">📊 Add to Leads Sheet</button>
       <button class="btn ghost" onclick="go(0)">← Back</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost" onclick="saveDataOnly()" style="flex:1">💾 Save Data Only</button>
+      <button class="btn ghost" onclick="saveAnalysisOnly()" style="flex:1">💾 Save Analysis</button>
     </div>
   </section>
 
@@ -1311,6 +1318,10 @@ function renderUSPCard(){
   const card = $('#uspCard'), box = $('#uspOptions');
   box.innerHTML = '';
   if (!client.usps || !client.usps.length) { card.classList.add('hidden'); return; }
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin:0 0 8px 0';
+  header.innerHTML = '<label style="color:var(--ok);font-weight:600;margin:0">🎯 Select a USP:</label><div style="display:flex;gap:6px"><button class="btn ghost small" onclick="editUSP()">✏️ Edit</button><button class="btn ghost small" onclick="copyUSP()">⧉ Copy</button></div>';
+  box.appendChild(header);
   client.usps.forEach((u, i) => {
     const label = document.createElement('label');
     label.style.cssText = 'display:flex; gap:10px; align-items:flex-start; margin-top:10px; cursor:pointer; font-size:13px; line-height:1.5; color:var(--text)';
@@ -1392,6 +1403,10 @@ function renderInsightsCard(){
   group('💪 Strengths', ins.strengths, 'var(--ok)');
   group('⚠ Concerns', ins.concerns, 'var(--warn)');
   group('🔑 SEO keywords', ins.keywords, 'var(--info)');
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex; gap:6px; margin-top:10px';
+  btnRow.innerHTML = '<button class="btn ghost small" onclick="editInsights()">✏️ Edit</button><button class="btn ghost small" onclick="copyInsights()">⧉ Copy</button>';
+  box.appendChild(btnRow);
   card.classList.remove('hidden');
 }
 
@@ -2395,7 +2410,7 @@ function renderHistory(){
   $('#histList').innerHTML = h.length ? h.map(x=>`
     <div class="hist-item">
       <div class="info"><b>${x.client.name}</b>
-        <span>${x.client.prof} • ${x.client.city} • ${x.ts}${x.client.source==='prospected'?' • <span style="color:var(--ok)">🎯 Prospected</span>':x.client.source==='imported'?' • <span style="color:var(--info)">📥 Imported</span>':''}</span></div>
+        <span>${x.client.prof} • ${x.client.city} • ${x.ts}${x.client.source==='prospected'?' • <span style="color:var(--ok)">🎯 Prospected</span>':x.client.source==='imported'?' • <span style="color:var(--info)">📥 Imported</span>':x.client.source==='data-only'?' • <span style="color:var(--muted)">💾 Data only</span>':x.client.source==='analysis-only'?' • <span style="color:#a78bfa">📊 Analysis</span>':''}</span></div>
       <div class="row" style="margin:0;flex-wrap:wrap;gap:4px">
         <button class="btn small" onclick="openItem(${x.id})">Open</button>
         ${x.client.phone ? `<button class="btn ghost small" onclick="openWhatsApp('${(x.client.phone||'').replace(/'/g,"\\'")}','${(x.prompts?.outreach||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n')}')" title="Send via WhatsApp">📲</button>` : ''}
@@ -2424,9 +2439,12 @@ function openItem(id){
   const v=(options.variant||'conservative'); setVariant(v, document.querySelector('#variantSeg button[onclick*="'+v+'"]'));
   renderUSPCard();
   renderInsightsCard();
-  showTab('landing', document.querySelector('.tab'));
-
-  go(3);
+  if (client.source === 'data-only' || client.source === 'analysis-only') {
+    go(1);
+  } else {
+    showTab('landing', document.querySelector('.tab'));
+    go(3);
+  }
 }
 function delItem(id){
   localStorage.setItem(LS_H, JSON.stringify(getHist().filter(x=>x.id!==id)));
@@ -2436,6 +2454,108 @@ function delItem(id){
 const aiImprove=lockGate(_aiImproveOrig);
 function updateSaveBtn(){const b=$('#saveClientBtn'); if(!b) return; b.textContent=sessionSaved?'✓ Saved (update)':'💾 Save client';}
 function saveClient(){ saveOrUpdate(); sessionSaved = true; updateSaveBtn(); toast('Client saved to History'); }
+
+function saveDataOnly(){
+  collect();
+  if(!client.name){ toast('Enter at least a name first'); return; }
+  client.source = 'data-only';
+  client.usps = null; client.selectedUSP = null; client.insights = null; client.competitors = null; client.gapAnalysis = null;
+  lastPrompts = {};
+  saveOrUpdate();
+  sessionSaved = true; updateSaveBtn();
+  toast('💾 Data saved (no analysis)');
+  go(4);
+}
+function saveAnalysisOnly(){
+  collect();
+  if(!client.name){ toast('Enter at least a name first'); return; }
+  client.source = 'analysis-only';
+  lastPrompts = {};
+  saveOrUpdate();
+  sessionSaved = true; updateSaveBtn();
+  toast('💾 Analysis saved');
+  go(4);
+}
+
+/* ── Section Edit / Copy helpers ── */
+function editUSP(){
+  const box = $('#uspOptions');
+  if(!client.usps || !client.usps.length){ toast('No USPs to edit'); return; }
+  const text = client.usps.join('\n');
+  box.innerHTML = '<textarea id="uspEditArea" style="width:100%;min-height:120px;background:#111;color:var(--text);border:1px solid var(--warn);border-radius:6px;padding:10px;font-size:13px;font-family:Inter,sans-serif" rows="6"></textarea>'
+    + '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" onclick="saveUSPEdit()">✓ Save</button><button class="btn ghost small" onclick="renderUSPCard()">Cancel</button></div>';
+  $('#uspEditArea').value = text;
+}
+function saveUSPEdit(){
+  const raw = $('#uspEditArea').value.trim();
+  const lines = raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  client.usps = lines.length ? lines : [buildFallbackUSP(client)];
+  client.selectedUSP = client.usps[0];
+  renderUSPCard();
+  toast('USP updated');
+}
+function copyUSP(){
+  if(!client.usps || !client.usps.length){ toast('No USPs to copy'); return; }
+  const text = '🎯 USP Options (Client: ' + client.name + ')\n\n'
+    + client.usps.map((u,i)=> (i+1) + '. ' + u + (u===client.selectedUSP ? ' ✓' : '')).join('\n');
+  navigator.clipboard.writeText(text).then(()=>toast('⧉ USP copied'));
+}
+function editInsights(){
+  const box = $('#insightsContent');
+  const ins = client.insights;
+  if(!ins){ toast('No insights to edit'); return; }
+  const text = JSON.stringify(ins, null, 2);
+  box.innerHTML = '<textarea id="insightsEditArea" style="width:100%;min-height:140px;background:#111;color:var(--text);border:1px solid var(--warn);border-radius:6px;padding:10px;font-size:12px;font-family:JetBrains Mono,monospace" rows="8"></textarea>'
+    + '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" onclick="saveInsightsEdit()">✓ Save</button><button class="btn ghost small" onclick="renderInsightsCard()">Cancel</button></div>';
+  $('#insightsEditArea').value = text;
+}
+function saveInsightsEdit(){
+  const raw = $('#insightsEditArea').value.trim();
+  try {
+    const data = JSON.parse(raw);
+    client.insights = data;
+    renderInsightsCard();
+    toast('Insights updated');
+  } catch(e){ toast('⚠ Invalid JSON — check the format'); }
+}
+function copyInsights(){
+  const ins = client.insights;
+  if(!ins){ toast('No insights to copy'); return; }
+  const lines = ['💬 Patient Insights (Client: ' + client.name + ')', ''];
+  if((ins.strengths||[]).length) lines.push('💪 Strengths:', ...ins.strengths.map(s=>'• '+s), '');
+  if((ins.concerns||[]).length)  lines.push('⚠ Concerns:',  ...ins.concerns.map(s=>'• '+s), '');
+  if((ins.keywords||[]).length)  lines.push('🔑 SEO keywords:', ...ins.keywords.map(s=>'• '+s), '');
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('⧉ Insights copied'));
+}
+function editGap(){
+  const box = $('#competitorsContent');
+  if(!client.gapAnalysis){ toast('No gap analysis to edit'); return; }
+  const text = JSON.stringify(client.gapAnalysis, null, 2);
+  box.innerHTML = '<textarea id="gapEditArea" style="width:100%;min-height:130px;background:#111;color:var(--text);border:1px solid var(--warn);border-radius:6px;padding:10px;font-size:12px;font-family:JetBrains Mono,monospace" rows="7"></textarea>'
+    + '<div style="display:flex;gap:6px;margin-top:8px"><button class="btn small" onclick="saveGapEdit()">✓ Save</button><button class="btn ghost small" onclick="cancelGapEdit()">Cancel</button></div>';
+  $('#gapEditArea').value = text;
+}
+function saveGapEdit(){
+  const raw = $('#gapEditArea').value.trim();
+  try {
+    const data = JSON.parse(raw);
+    if(!Array.isArray(data.strengths)||!Array.isArray(data.gaps)||!Array.isArray(data.opportunities)){
+      throw new Error('Missing required arrays'); }
+    client.gapAnalysis = data;
+    renderCompetitorsCard(client); renderGapAnalysis(client);
+    toast('Gap analysis updated');
+  } catch(e){ toast('⚠ Invalid JSON — needs strengths[], gaps[], opportunities[]'); }
+}
+function cancelGapEdit(){ renderCompetitorsCard(client); renderGapAnalysis(client); }
+function copyGap(){
+  const g = client.gapAnalysis;
+  if(!g){ toast('No gap analysis to copy'); return; }
+  const lines = ['⚔️ Competitor Gap Analysis (Client: ' + client.name + ')', ''];
+  if((g.strengths||[]).length)   lines.push('✓ Strengths:', ...g.strengths.map(s=>'• '+s), '');
+  if((g.gaps||[]).length)        lines.push('⚠ Gaps:', ...g.gaps.map(s=>'• '+s), '');
+  if((g.opportunities||[]).length) lines.push('🎯 Opportunities:', ...g.opportunities.map(s=>'• '+s), '');
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>toast('⧉ Gap analysis copied'));
+}
 function discardClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); clearAIContent(); if(sessionSaved){ go(0); toast('Closed - client remains in History'); } else { currentId=null; sessionGenerated=false; sessionSaved=false; go(0); toast('Discarded - not saved'); } }
 function newClient(){ deckShots = {desktop:'', mobile:''}; document.querySelectorAll('.shot-dot').forEach(d => d.classList.remove('has')); if(sessionGenerated && !sessionSaved){ if(!confirm('This client was generated but NOT saved. Discard it?')) return; } clearAIContent(); currentId=null; sessionGenerated=false; sessionSaved=false; updateSaveBtn(); go(0); }
 function _exportAllOrig(){ dl('openprompt-history.json', JSON.stringify(getHist(),null,2)); }
