@@ -1957,7 +1957,9 @@ function renderProspectResults(places){
     badges += hasWeb
       ? '<span style="font-size:11px; padding:3px 8px; border-radius:4px; background:#1a2818; color:var(--muted)">HAS WEBSITE</span>'
       : '<span style="font-size:11px; padding:3px 8px; border-radius:4px; background:#2d3a20; color:var(--ok)">🎯 NO WEBSITE</span>';
+    badges += '<span class="badge shallow" style="font-size:10px; padding:2px 6px; border-radius:3px; background:#1a2818; color:var(--muted)">shallow</span>';
     badges += '<button class="btn small" onclick="useProspect(this)" data-place=\'' + JSON.stringify(p).replace(/'/g, "&#39;") + '\' data-city=\'' + (city||'').replace(/'/g, "&#39;") + '\'>Use →</button>';
+    badges += '<button class="btn small" onclick="deepAnalyzeLead(this)" data-url=\'' + (p.place_id ? 'https://maps.google.com/maps/place/?q=place_id:' + p.place_id : (p.website || '')) + '\' style="background:#2d3a20;color:var(--ok)">Deep analyze</button>';
     badges += '</div>';
 
     card.innerHTML = info + badges;
@@ -1965,6 +1967,42 @@ function renderProspectResults(places){
   });
 }
 
+function deepAnalyzeLead(btn){
+  const url = btn.getAttribute('data-url');
+  if(!url){ toast('No Maps link saved for deep analysis'); return; }
+  if(!confirm('Deep analysis runs full extraction (SerpAPI + Gemini) and consumes 1 credit. Continue?')) return;
+  // Set up client from saved lead data or from the URL directly
+  const pData = btn.getAttribute('data-place');
+  if(pData){
+    const p = JSON.parse(pData);
+    client = {
+      rawUrl: url,
+      name: p.title || p.name || '',
+      prof: p.type || p.category || '',
+      city: p.address ? (p.address.split(',').map(s=>s.trim()).slice(-2)[0]||'') : '',
+      phone: sanitizePhone(p.phone || ''),
+      address: p.address || '',
+      rating: p.rating || '',
+      reviews: p.reviews ? String(p.reviews) : '',
+      website: p.website ? 'yes' : 'no',
+      identity: 'no',
+      website_url: p.website || '',
+      hours: p.hours || '',
+      notes: '',
+      source: 'prospected',
+      depth: 'deep'
+    };
+    if(p.gps_coordinates){ client.lat = p.gps_coordinates.latitude; client.lng = p.gps_coordinates.longitude; }
+  }
+  else {
+    client = { rawUrl: url, name: '', prof: '', city: '', phone: '', address: '', rating: '', reviews: '', website: 'no', identity: 'no', website_url: '', hours: '', notes: '', source: 'prospected',
+      depth: 'deep' };
+  }
+  $('#f_url').value = url;
+  go(1); // Review screen
+  // Trigger pipeline manually using existing analyze core
+  analyze();
+}
 function useProspect(btn){
   currentId = null; sessionGenerated = false; sessionSaved = false;
   hideAICards();
@@ -1988,7 +2026,8 @@ function useProspect(btn){
     website_url: parsed.website_url || p.website || '',
     hours: parsed.hours || '',
     notes: '',
-    source: 'prospected'
+    source: 'prospected',
+      depth: 'shallow'
   };
 
   if(client.website_url && isJunkUrl(client.website_url)) client.website_url = '';
@@ -2685,7 +2724,18 @@ function renderLeads(){
   const leads=getLeads();
   const el=$('#leadsToolbar');
   if(!el) return;
-  el.innerHTML = '<span style="color:var(--muted);font-size:13px">Leads: <b>'+leads.length+'</b></span>';
+  if(!leads.length){
+    el.innerHTML = '<span style="color:var(--muted);font-size:13px">Leads: <b>0</b></span>';
+    return;
+  }
+  const rows = leads.map(l => `
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:6px 0; border-bottom:1px solid var(--border)">
+      <span style="flex:1; min-width:180px; font-size:13px"><b>${l.name}</b> <span style="color:var(--muted)">${l.prof} • ${l.city}</span></span>
+      <span class="badge ${l.depth==='deep'?'deep':'shallow'}" style="font-size:10px; padding:2px 6px; border-radius:3px; background:${l.depth==='deep'?'#2d3a20':'#1a2818'}; color:${l.depth==='deep'?'var(--ok)':'var(--muted)'}">${l.depth}</span>
+      <button class="btn small" onclick="deepAnalyzeLead(this)" data-url="${l.rawUrl||''}" data-place='${JSON.stringify({name:l.name, address:l.city, phone:l.phone, rating:l.rating, reviews:l.reviews, website:l.website}).replace(/'/g,"'")}'>Deep analyze</button>
+    </div>
+  `).join('');
+  el.innerHTML = '<div style="max-height:200px; overflow:auto">' + rows + '</div>';
 }
 function csvEscape(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }
 function downloadLeadsCSV(){
@@ -2710,13 +2760,18 @@ function clearLeads(){
 }
 
 function addLeadFromClient(c){
-  const row={name:c.name||'', prof:c.prof||'', city:c.city||'', phone:c.phone||'', rating:c.rating||'', website:c.website_url||'', ts:new Date().toISOString().replace('T',' ').slice(0,16)};
-  const leads=getLeads();
-  if(leads.some(l=>l.name===row.name && l.city===row.city)){ toast('Already in leads'); return; }
-  leads.unshift(row);
+  const row={name:c.name||'', prof:c.prof||'', city:c.city||'', phone:c.phone||'', rating:c.rating||'', website:c.website_url||'', rawUrl:c.rawUrl||'', depth: c.depth||'shallow', ts:new Date().toISOString().replace('T',' ').slice(0,16)};
+  let leads=getLeads();
+  const idx = leads.findIndex(l=>l.name===row.name && l.city===row.city);
+  if(idx !== -1){
+    leads[idx] = { ...leads[idx], ...row };
+    toast('Lead updated');
+  } else {
+    leads.unshift(row);
+    toast('Added to leads ('+leads.length+' total)');
+  }
   try { localStorage.setItem(LS_L, JSON.stringify(leads)); }
   catch(e){ toast('Storage full — export your data and clean History'); return; }
-  toast('Added to leads ('+leads.length+' total)');
   renderLeads();
   notifyChange();
 }
