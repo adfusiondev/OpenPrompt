@@ -2035,7 +2035,9 @@ Structure: Hero avec note Google + services + contact + WhatsApp.
 CTA principal: réservation WhatsApp en 1 clic.
 
 Donne-moi un design efficace et crédible — pas besoin de fioritures,
-juste une page qui fonctionne parfaitement et inspire confiance.`
+juste une page qui fonctionne parfaitement et inspire confiance.
+
+ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
     },
     bold: {
       title: "Landing page moderne et professionnelle",
@@ -2064,7 +2066,9 @@ CTA principal: réservation WhatsApp en 1 clic.
 
 Liberté totale: palette sophistiquée, typographie éditoriale, animations
 subtiles, micro-interactions. Je veux un résultat digne d'une clinique
-parisienne haut de gamme.`
+parisienne haut de gamme.
+
+ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.`
     }
   },
   en: {
@@ -2078,7 +2082,9 @@ Structure: hero with Google rating + services + contact + WhatsApp.
 Main CTA: one-click WhatsApp booking.
 
 Give me an effective, credible design — no frills needed, just a page
-that works perfectly and inspires trust.`
+that works perfectly and inspires trust.
+
+ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
     },
     bold: {
       title: "Modern and professional landing page",
@@ -2106,7 +2112,9 @@ Main CTA: one-click WhatsApp booking.
 
 Total freedom: sophisticated palette, editorial typography, subtle
 animations, micro-interactions. I want a result worthy of a
-high-end flagship clinic.`
+high-end flagship clinic.
+
+ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.
     }
   },
   ar: {
@@ -2120,7 +2128,9 @@ high-end flagship clinic.`
 الزر الرئيسي: حجز واتساب بنقرة واحدة.
 
 أعطني تصميمًا فعالًا وموثوقًا — لا حاجة للزوائد، فقط صفحة تعمل
-بشكل مثالي وتُلهم الثقة.`
+بشكل مثالي وتُلهم الثقة.
+
+ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
     },
     bold: {
       title: "صفحة هبوط حديثة واحترافية",
@@ -2147,7 +2157,9 @@ high-end flagship clinic.`
 الزر الرئيسي: حجز واتساب بنقرة واحدة.
 
 حرية تامة: لوحة ألوان راقية، خطوط تحريرية، حركات دقيقة،
-تفاعلات دقيقة. أريد نتيجة تليق بعيادة فاخرة.`
+تفاعلات دقيقة. أريد نتيجة تليق بعيادة فاخرة.
+
+ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.`
     }
   }
 };
@@ -2272,6 +2284,12 @@ VISUAL TONE: ${TONE}.${USP ? '\n' + USP : ''}${INSIGHTS ? '\n\n' + INSIGHTS : ''
 
 QUALITY TIER — CREATIVE DIRECTION:
 ${TIER}
+
+MANDATORY PAGE FEATURES (apply to every version):
+1. Booking form: real-time client-side validation (non-empty name, valid phone format) with visual error states on inputs; persist entered data in localStorage and restore it after refresh; clear on successful send.
+2. Contact: a fixed "Call now" button in the mobile menu (one-tap tel: link) in addition to the WhatsApp CTA; and a "Leave a Google Review" button wired to a single clearly-named constant (GOOGLE_REVIEW_URL) holding the client's Google Maps link, easy for the owner to replace.
+3. Theme & type: working light/dark mode toggle that remembers the user's choice (system preference as default); Arabic sections in Cairo or IBM Plex Sans Arabic with consistent RTL rendering.
+4. Final self-check before delivering: responsive layout, accessibility (contrast, focus states, aria labels), and nothing existing broken.
 
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast. Services to feature (suggest): ${servicesHint}. Embed a LIVE Google Map using the embed src above (keyless iframe), with a prominent 'Get Directions' button linking to the directions link — do NOT use a placeholder map.
 OUTPUT: single self-contained HTML/CSS/JS file.${BUILD_ORDER}`;
