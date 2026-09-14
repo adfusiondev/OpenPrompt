@@ -912,6 +912,9 @@ function showPreview(){
 
 function parseMapsUrl(url){
   const out = { placeId: null, name: null, lat: null, lng: null, cid: null };
+  const placeIdQueryParam = url.match(/\?q=place_id:([^&]+)/);
+  if(placeIdQueryParam){ out.placeId = placeIdQueryParam[1]; return out; }
+
   const placeMatch = url.match(/\/place\/([^/@?]+)/);
   if(placeMatch) out.name = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
   const coordMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
@@ -1742,12 +1745,26 @@ async function _analyzeOrig(){
   url = await resolveShortUrl(url, timeLeft());
 
   const parsed = parseMapsUrl(url);
+  // Preserve existing client data if it's from a prospected lead (deep analyze)
+  const isDeepAnalyze = client.source === 'prospected' && client.depth === 'deep';
   client = {
-    rawUrl: url, name: parsed.name || '', source: '',
-    prof: '', city: '', phone: '', address: '',
-    rating: '', reviews: '', website: 'no', identity: 'no',
-    website_url: '', hours: '', notes: '',
-    lat: parsed.lat, lng: parsed.lng
+    rawUrl: url,
+    name: isDeepAnalyze ? (client.name || parsed.name || '') : (parsed.name || ''),
+    source: isDeepAnalyze ? client.source : '',
+    prof: isDeepAnalyze ? (client.prof || '') : '',
+    city: isDeepAnalyze ? (client.city || '') : '',
+    phone: isDeepAnalyze ? (client.phone || '') : '',
+    address: isDeepAnalyze ? (client.address || '') : '',
+    rating: isDeepAnalyze ? (client.rating || '') : '',
+    reviews: isDeepAnalyze ? (client.reviews || '') : '',
+    website: isDeepAnalyze ? client.website : 'no',
+    identity: isDeepAnalyze ? client.identity : 'no',
+    website_url: isDeepAnalyze ? (client.website_url || '') : '',
+    hours: isDeepAnalyze ? (client.hours || '') : '',
+    notes: isDeepAnalyze ? (client.notes || '') : '',
+    lat: parsed.lat,
+    lng: parsed.lng,
+    depth: isDeepAnalyze ? client.depth : 'shallow', // Retain depth if already set
   };
 
   if(!serverKeys.serpapi) logLine('⚠ Layer 1 skipped: SERPAPI_KEY not set in proxy .env', 'warn');
