@@ -220,10 +220,14 @@ pre.prompt[contenteditable="true"]{outline:none}
         <div><label>Min reviews</label><input id="p_minReviews" type="number" value="0" min="0"></div>
       </div>
       <label class="toggle" style="margin-top:14px">
-        <input type="checkbox" id="p_noWeb" checked>
+        <input type="checkbox" id="p_noWeb">
         <span class="slider"></span>
         <span>Show ONLY businesses without a website</span>
       </label>
+      <div class="grid2" style="margin-top:14px">
+        <label class="pcheck"><input type="checkbox" id="p_hasPhone"> Has a phone number</label>
+        <label class="pcheck"><input type="checkbox" id="p_exclChains"> Exclude chain brands</label>
+      </div>
       <div class="row">
         <button class="btn" onclick="prospectSearch()">🔍 Search prospects</button>
       </div>
@@ -393,21 +397,23 @@ pre.prompt[contenteditable="true"]{outline:none}
       <button class="btn ghost" onclick="go(3)">← Back</button>
     </div>
     <h1>Client History</h1>
-    <div class="row" style="margin-top:0;margin-bottom:10px;align-items:center;flex-wrap:wrap">
-      <div id="leadsToolbar" style="flex:1;min-width:120px"></div>
+    <div class="row" style="margin-top:0;margin-bottom:10px;flex-wrap:wrap">
       <button class="btn ghost small" onclick="downloadLeadsCSV()">⬇ Download leads.csv</button>
       <button class="btn ghost small" onclick="copyLeadsTSV()">⧉ Copy for Google Sheets</button>
       <button class="btn ghost small" onclick="clearLeads()">🗑 Clear leads</button>
       <button class="btn ghost small" onclick="openImportModal()">⬆ Import</button>
       <button class="btn ghost small" onclick="backupData()">⬇ Full backup</button>
       <button class="btn ghost small" onclick="$('#restoreFile').click()">⬆ Restore backup</button>
-      <input type="file" id="restoreFile" accept=".json,application/json" onchange="restoreData(this)" style="display:none">
       <label class="toggle" style="font-size:12px;margin:0;margin-inline-start:8px">
         <input type="checkbox" id="autoLeadsToggle" onchange="localStorage.setItem('op_auto_leads',this.checked)">
         <span class="slider"></span>
         <span>Auto-add</span>
       </label>
     </div>
+    <div class="row" style="margin-top:0;margin-bottom:14px">
+      <div id="leadsToolbar" style="flex:1;min-width:0"></div>
+    </div>
+    <input type="file" id="restoreFile" accept=".json,application/json" onchange="restoreData(this)" style="display:none">
     <div class="row" style="margin-top:0;margin-bottom:18px">
       <input id="histSearch" class="mono" placeholder="🔍 Filter by name or city..." oninput="renderHistory()" style="flex:1;min-width:180px">
       <button class="btn ghost small" onclick="exportAll()">↓ Export all as JSON</button>
@@ -1892,12 +1898,25 @@ function switchMode(mode){
   logLine('Mode: ' + mode);
 }
 const analyze=lockGate(_analyzeOrig);
+const CITY_TOKENS = new Set(['riyadh','jeddah','dammam','dhahran','khobar','mecca','makkah','medina','madina','jubail','yanbu','tabuk','abha','hofuf','hail','arar','buraidah','qassim','taif','khamis','najran','jizan','dubai','abu dhabi','sharjah','ajman','ras al khaimah','fujairah','al ain','doha','manama','muharraq','kuwait','salmiya','hawally','muscat','salalah','cairo','giza','alexandria','casablanca','rabat','marrakech','tangier','tunis']);
+function prospectBaseName(name, cityHint){
+  let t = String(name||'').toLowerCase().trim().replace(/[|()]/g,' ').replace(/\s{2,}/g,' ');
+  t = t.split(/ - | \u2013 | \u2014 /)[0].trim();
+  const toks = t.split(' ').filter(Boolean);
+  const h = String(cityHint||'').toLowerCase().trim();
+  const last = toks[toks.length-1]||'';
+  if(toks.length >= 2 && (CITY_TOKENS.has(last) || last === h || last === 'branch' || last === 'mall')) toks.pop();
+  return toks.join(' ');
+}
+
 async function _prospectSearchOrig(){
   const prof = ($('#p_prof')?.value||'').trim();
   const city = ($('#p_city')?.value||'').trim();
   const minRating = parseFloat($('#p_minRating')?.value||'0') || 0;
   const minReviews = parseInt($('#p_minReviews')?.value||'0') || 0;
-  const noWebOnly = $('#p_noWeb')?.checked !== false;
+  const noWebOnly = $('#p_noWeb')?.checked === true;
+  const hasPhoneOnly = $('#p_hasPhone')?.checked === true;
+  const exclChains = $('#p_exclChains')?.checked === true;
 
   if(!prof || !city){ toast('Please enter both profession and city'); return; }
 
@@ -1945,8 +1964,18 @@ async function _prospectSearchOrig(){
 
   let filtered = places.slice(0, 20);
   if(noWebOnly) filtered = filtered.filter(p => !p.website);
+  if(hasPhoneOnly) filtered = filtered.filter(p => p.phone || p.phone_number);
   if(minRating > 0) filtered = filtered.filter(p => (p.rating||0) >= minRating);
   if(minReviews > 0) filtered = filtered.filter(p => (p.reviews||0) >= minReviews);
+  if(exclChains){
+    const seen = new Set();
+    filtered = filtered.filter(p => {
+      const base = prospectBaseName(p.title || p.name, city);
+      if(!base || seen.has(base)) return false;
+      seen.add(base);
+      return true;
+    });
+  }
 
   logLine('Prospector: ' + filtered.length + ' remain after filters', 'info');
 
