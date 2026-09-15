@@ -47,9 +47,11 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--muted)}
 .gs-cityrow{display:flex; gap:8px; align-items:stretch}
 .gs-cityrow #p_city{flex:1; min-width:0}
 .gs-country{white-space:nowrap; max-width:44%; overflow:hidden; text-overflow:ellipsis; font-size:12px}
-.gs-panel{position:absolute; top:calc(100% + 5px); left:0; right:0; z-index:80;
+.gs-panel{position:absolute; top:calc(100% + 5px); left:0; right:0; z-index:999;
   background:#0e0e0d; border:1px solid var(--border); border-radius:6px;
-  max-height:250px; overflow-y:auto; box-shadow:0 10px 28px rgba(0,0,0,.55)}
+  max-height:300px; overflow-y:auto; overscroll-behavior:contain; box-shadow:0 10px 28px rgba(0,0,0,.55)}
+.gs-panel::-webkit-scrollbar{width:8px}
+.gs-panel::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px}
 .gs-panel .gs-head{padding:7px 10px 3px; font-size:10px; letter-spacing:.08em;
   text-transform:uppercase; color:var(--muted); font-weight:700}
 .gs-panel .gs-item{padding:9px 10px; font-size:13px; cursor:pointer; border-radius:4px;
@@ -57,7 +59,7 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--muted)}
 .gs-panel .gs-item:hover,.gs-panel .gs-item.active{background:#1a2818; color:var(--ok)}
 .gs-panel .gs-empty{padding:10px 12px; font-size:12px; color:var(--muted)}
 .gs-panel .gs-reset{border-top:1px solid var(--border)}
-@media(max-width:640px){.gs-panel{max-height:220px}.gs-country{max-width:38%}}
+@media(max-width:640px){.gs-panel{max-height:260px}.gs-country{max-width:38%}}
 
 .btn{background:var(--light); color:var(--dark); border:1px solid var(--light);
   padding:10px 22px; border-radius:6px; cursor:pointer; font-weight:700; font-size:14px}
@@ -2053,7 +2055,7 @@ function gsCountryBtnLabel(){
 }
 function gsCountryHtml(){
   let html = '<div class="gs-item gs-reset" role="option" data-code=""><span>🌐</span> No country (free search)</div>';
-  COUNTRIES.forEach(c=>{ html += '<div class="gs-item" role="option" data-code="'+esc(c.code)+'">'+c.flag+' '+esc(c.name)+'</div>'; });
+  COUNTRIES.forEach(c=>{ html += '<div class="gs-item" role="option" data-code="'+esc(c.code)+'" data-val="'+esc(c.code)+'">'+c.flag+' '+esc(c.name)+'</div>'; });
   return html;
 }
 function gsToggleCountry(e){
@@ -2104,7 +2106,19 @@ function gsBindGuided(){
   if(pp){ pp.addEventListener('focus', gsOpenProf); pp.addEventListener('click', ()=>{ if(pp.value!==undefined && pc.classList.contains('hidden')) gsOpenProf(); }); pp.addEventListener('input', gsOpenProf); pp.addEventListener('keydown', e=>gsNavKeys(e, pc, v=>gsPickProf(v,pp))); }
   if(pc){ pc.addEventListener('mousedown', e=>{ const it=e.target.closest('.gs-item'); if(it){ e.preventDefault(); gsPickProf(it.dataset.val, pp); } }); }
   if(cty){ cty.addEventListener('focus', gsOpenCity); cty.addEventListener('click', ()=>{ if(cpanel.classList.contains('hidden')) gsOpenCity(); }); cty.addEventListener('input', gsOpenCity); cty.addEventListener('keydown', e=>gsNavKeys(e, cpanel, v=>gsPickCity(v,cty))); }
-  if(gpanel){ gpanel.addEventListener('mousedown', e=>{ const it=e.target.closest('.gs-item'); if(it){ e.preventDefault(); gsPickCountry(it.dataset.code); } }); }
+  if(gpanel){
+    gpanel.setAttribute('tabindex','-1');
+    gpanel.addEventListener('mousedown', e=>{ const it=e.target.closest('.gs-item'); if(it){ e.preventDefault(); gsPickCountry(it.dataset.code); } });
+    gpanel.addEventListener('keydown', e=>gsNavKeys(e, gpanel, v=>gsPickCountry(v)));
+  }
+  const gbtn=$('#p_countryBtn');
+  if(gbtn) gbtn.addEventListener('keydown', e=>{
+    if(e.key==='ArrowDown' || e.key==='Enter'){
+      e.preventDefault();
+      if(gpanel && gpanel.classList.contains('hidden')) gsToggleCountry(e);
+      if(gpanel){ const items=gpanel.querySelectorAll('.gs-item'); if(items.length) gsSetActive(items,0); gpanel.focus(); }
+    } else if(e.key==='Escape'){ gsCloseAll(); }
+  });
   document.addEventListener('click', e=>{ if(!e.target.closest('.gs-wrap') && !e.target.closest('#gsCountry')) gsCloseAll(); });
 }
 gsBindGuided();
