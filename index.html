@@ -43,6 +43,22 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--muted)}
 .grid2{display:grid; grid-template-columns:1fr 1fr; gap:0 18px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
 
+.gs-wrap{position:relative}
+.gs-cityrow{display:flex; gap:8px; align-items:stretch}
+.gs-cityrow #p_city{flex:1; min-width:0}
+.gs-country{white-space:nowrap; max-width:44%; overflow:hidden; text-overflow:ellipsis; font-size:12px}
+.gs-panel{position:absolute; top:calc(100% + 5px); left:0; right:0; z-index:80;
+  background:#0e0e0d; border:1px solid var(--border); border-radius:6px;
+  max-height:250px; overflow-y:auto; box-shadow:0 10px 28px rgba(0,0,0,.55)}
+.gs-panel .gs-head{padding:7px 10px 3px; font-size:10px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); font-weight:700}
+.gs-panel .gs-item{padding:9px 10px; font-size:13px; cursor:pointer; border-radius:4px;
+  display:flex; align-items:center; gap:8px; min-height:36px; color:var(--text)}
+.gs-panel .gs-item:hover,.gs-panel .gs-item.active{background:#1a2818; color:var(--ok)}
+.gs-panel .gs-empty{padding:10px 12px; font-size:12px; color:var(--muted)}
+.gs-panel .gs-reset{border-top:1px solid var(--border)}
+@media(max-width:640px){.gs-panel{max-height:220px}.gs-country{max-width:38%}}
+
 .btn{background:var(--light); color:var(--dark); border:1px solid var(--light);
   padding:10px 22px; border-radius:6px; cursor:pointer; font-weight:700; font-size:14px}
 .btn.ghost{background:transparent; color:var(--text); border:1px solid var(--border)}
@@ -214,15 +230,22 @@ pre.prompt[contenteditable="true"]{outline:none}
       <label style="color:var(--ok); font-weight:600; font-size:14px">🎯 Prospector Mode</label>
       <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Toggle the option below to show only those WITHOUT a website.</p>
       <div class="grid2">
-        <div><label>Profession</label><input id="p_prof" placeholder="dental clinic"></div>
-        <div><label>City</label><input id="p_city" placeholder="Riyadh"></div>
+        <div class="gs-wrap">
+          <label for="p_prof">Profession</label>
+          <input id="p_prof" placeholder="dental clinic" autocomplete="off" aria-expanded="false">
+          <div id="gsProf" class="gs-panel hidden" role="listbox"></div>
+        </div>
+        <div class="gs-wrap">
+          <label for="p_city">City</label>
+          <div class="gs-cityrow">
+            <button type="button" id="p_countryBtn" class="btn small ghost gs-country" onclick="gsToggleCountry(event)" title="Choose a country to get its cities">🌍 Select country</button>
+            <input id="p_city" placeholder="Riyadh" autocomplete="off" aria-expanded="false">
+          </div>
+          <div id="gsCountry" class="gs-panel hidden" role="listbox" style="max-height:300px"></div>
+          <div id="gsCity" class="gs-panel hidden" role="listbox"></div>
+        </div>
         <div><label>Min rating ⭐</label><input id="p_minRating" type="number" step="0.1" value="0" min="0" max="5"></div>
         <div><label>Min reviews</label><input id="p_minReviews" type="number" value="0" min="0"></div>
-      </div>
-      <div class="row" style="margin-top:10px; gap:6px; flex-wrap:wrap">
-        <button class="btn small" onclick="quickPick('agence immobili\u00e8re')">🏠 Agence immobili&egrave;re</button>
-        <button class="btn small" onclick="quickPick('location voiture')">🚗 Location voiture</button>
-        <button class="btn small" onclick="quickPick('agence de voyage')">✈️ Agence de voyage</button>
       </div>
       <label class="toggle" style="margin-top:14px">
         <input type="checkbox" id="p_noWeb">
@@ -863,21 +886,73 @@ const PACK_TRAVELERS = {
 };
 
 const VERTICALS = {
-  dental: { label:'Dental clinic', regex:/(dental|dentist|orthodont|\u0623\u0633\u0646\u0627\u0646)/i, services:['dental cleaning & whitening','implants','orthodontics/braces','veneers','pediatric dentistry','emergency care'], audience:'patients', roleLine:'dental landing pages', scene:{ subject:'modern dental operatory with a smiling dentist gently guiding a patient into a dental chair', palette:'white and sage green with subtle teal accents', env:'bright, organized clinic interior with modern equipment' }, seoSeeds:['dentist near me','dental clinic','teeth whitening','dental implants'], packStrings:PACK_PATIENT },
-  beauty: { label:'Beauty salon', regex:/(beauty|salon|spa|hair|nail|\u062a\u062c\u0645\u064a\u0644|\u0635\u0627\u0644\u0648\u0646)/i, services:['hair styling & treatment','skin/facial care','nails','makeup','spa packages','membership offers'], audience:'patients', roleLine:'beauty salon landing pages', scene:{ subject:'luxe beauty treatment room with an aesthetician preparing a facial station', palette:'soft blush pink and warm gold with ivory tones', env:'elegant salon interior with ambient lighting, marble surfaces, and fresh flowers' }, seoSeeds:['beauty salon','hair salon','facial treatment','manicure near me'], packStrings:PACK_PATIENT },
-  eye: { label:'Eye clinic', regex:/(ophthalm|optic|eye|\u0639\u064a\u0648\u0646|\u0628\u0635\u0631\u064a\u0627\u062a)/i, services:['comprehensive eye exams','LASIK & vision correction','glasses & contact lenses','pediatric ophthalmology','dry-eye treatment'], audience:'patients', roleLine:'eye clinic landing pages', scene:{ subject:'bright optometry reception with professional staff greeting a patient at the front desk', palette:'clean white and sky blue with silver accents', env:'modern eye clinic interior with display frames and natural light' }, seoSeeds:['eye clinic','optometrist','LASIK','contact lenses'], packStrings:PACK_PATIENT },
-  derma: { label:'Dermatology clinic', regex:/(dermatolog|skin care|\u062c\u0644\u062f\u064a)/i, services:['acne & scar treatment','laser hair removal','skin rejuvenation','mole screening','cosmetic dermatology'], audience:'patients', roleLine:'dermatology clinic landing pages', scene:{ subject:'modern dermatology consultation room with a dermatologist reviewing skin imaging', palette:'white and soft peach with warm wood accents', env:'clean, clinical yet inviting treatment room with state-of-the-art laser equipment' }, seoSeeds:['dermatologist','skin clinic','acne treatment','laser hair removal'], packStrings:PACK_PATIENT },
-  physio: { label:'Physiotherapy center', regex:/(physio|physical therapy|\u0639\u0644\u0627\u062c \u0637\u0628\u064a\u0639\u064a|\u062a\u0623\u0647\u064a\u0644)/i, services:['sports injury rehab','manual therapy','posture correction','post-surgery rehabilitation','home exercise programs'], audience:'patients', roleLine:'physiotherapy landing pages', scene:{ subject:'spacious physiotherapy studio with a therapist guiding a patient through recovery exercises', palette:'soft green and warm grey with natural wood tones', env:'bright rehabilitation center with exercise equipment and natural light' }, seoSeeds:['physiotherapy','physical therapy','sports rehab','back pain treatment'], packStrings:PACK_PATIENT },
-  pharmacy: { label:'Pharmacy', regex:/(pharmac|\u0635\u064a\u062f\u0644\u064a)/i, services:['medication supply & refills','free health screenings','vaccination','skin/hygiene products','delivery service'], audience:'patients', roleLine:'pharmacy landing pages', scene:{ subject:'bright modern pharmacy with a pharmacist assisting a customer at the consultation counter', palette:'clean white and fresh green with soft blue accents', env:'well-organized pharmacy interior with lit shelving and a welcoming consultation area' }, seoSeeds:['pharmacy near me','medication delivery','vaccination','pharmacie'], packStrings:PACK_PATIENT },
-  veterinary: { label:'Veterinary clinic', regex:/(veterinar|\bvet\b|\u0628\u064a\u0637\u0631)/i, services:['vaccinations','surgery','grooming','emergency care','dental care for pets'], audience:'patients', roleLine:'veterinary clinic landing pages', scene:{ subject:'friendly veterinary clinic with a vet gently examining a pet on the examination table', palette:'soft teal and warm beige with natural wood tones', env:'bright, caring clinic environment with pet-friendly design elements' }, seoSeeds:['veterinary clinic','vet near me','pet care','puppy vaccination'], packStrings:PACK_PATIENT },
-  restaurant: { label:'Restaurant', regex:/(restaurant|cafe|coffee|pizza|burger|\u0645\u0637\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0627\u0641\u064a\u0647)/i, services:['signature dishes & menu highlights','online reservation','delivery/order online','family & group offers','chef specials'], audience:'customers', roleLine:'restaurant landing pages', scene:{ subject:'inviting restaurant interior with a chef presenting a signature dish at a beautifully set table', palette:'warm amber and deep green with copper accents', env:'stylish dining space with soft pendant lighting, textured walls, and elegant table settings' }, seoSeeds:['restaurant near me','reservation','delivery','café'], packStrings:PACK_PATIENT },
-  legal: { label:'Law office', regex:/(law|attorney|legal|\u0645\u062d\u0627\u0645)/i, services:['free initial consultation','contracts & drafting','court representation','corporate legal advice'], audience:'customers', roleLine:'law firm landing pages', scene:{ subject:'elegant law office with a confident attorney seated at a mahogany desk', palette:'warm walnut wood, leather brown, and cream with brass accents', env:'refined office with floor-to-ceiling bookshelves, legal volumes, and warm ambient lighting' }, seoSeeds:['law firm','lawyer','legal consultation','avocat'], packStrings:PACK_PATIENT },
-  plastic: { label:'Plastic & cosmetic surgery', regex:/(plastic surgeon|cosmetic surgeon|plastic surgery|chirurgie esth\u00e9tique|chirurgien esth\u00e9tique|chirurgie plastique|\u062c\u0631\u0627\u062d\u0629 \u062a\u062c\u0645\u064a\u0644|\u062a\u062c\u0645\u064a\u0644|esth\u00e9ticien)/i, services:['Rhinoplasty','Liposuction & body contouring','Breast augmentation','Botox & fillers','Blepharoplasty','Post-operative care'], audience:'patients', roleLine:'plastic surgery landing pages', scene:{ subject:'a plastic surgeon reviewing a consultation with a patient in a refined consultation lounge', palette:'warm neutral tones with soft beige and sand accents', env:'elegant aesthetic clinic consultation lounge, warm neutral tones, soft golden light, refined minimal decor' }, seoSeeds:['plastic surgeon','cosmetic surgery','rhinoplasty','botox'], packStrings:PACK_PATIENT },
-  realty: { label:'Real estate agency', regex:/(real estate|property|immobili|realtor|agence immob|\u0639\u0642\u0627\u0631)/i, services:['achat / vente','location longue & courte dur\u00e9e','gestion locative','estimation','accompagnement juridique'], audience:'clients', single:'client', roleLine:'real estate landing pages', scene:{ subject:'bright real estate agency office with an agent presenting a property listing to buyers', palette:'warm greys and deep blue with gold accents', env:'modern agency storefront with property photos and neighborhood landmarks visible' }, seoSeeds:['agence immobili\u00e8re','real estate agency','appartement \u00e0 vendre','property near me'], packStrings:PACK_CLIENTS, noise:['agence','immo','immobilier','estate','realty'] },
-  carrental: { label:'Car rental agency', regex:/(car rental|car hire|rent a car|location de voiture|location de voitures|location voiture|voiture de location|locauto|\u062a\u0623\u062c\u064a\u0631 \u0633\u064a\u0627\u0631\u0627\u062a)/i, services:['citadines','SUV & famille','luxe','longue dur\u00e9e','avec chauffeur','livraison a\u00e9roport 24/7'], audience:'customers', single:'customer', roleLine:'car rental landing pages', scene:{ subject:'lineup of clean rental cars in front of a modern rental office, an employee handing keys to a smiling customer', palette:'fresh blues and clean whites with orange accents', env:'bright rental lot with a reception counter and airport shuttle visible' }, seoSeeds:['location voiture','car rental','rent a car Marrakech','location voiture Marrakech'], packStrings:PACK_CUSTOMERS, noise:['car','auto','rental','location','voiture'] },
-  travel: { label:'Travel & tourism agency', regex:/(travel agency|travel agent|tour operator|voyage|tourisme|tourism|safari|circuit organis|omra|hajj|\u0633\u064a\u0627\u062d\u0629|\u0633\u0641\u0631|\u0623\u0633\u0641\u0627\u0631)/i, services:['packages Omra & Hajj','circuits organis\u00e9s','assistance visa','billets & h\u00f4tels','voyages groupes'], audience:'travelers', single:'traveler', roleLine:'travel & tourism landing pages', scene:{ subject:'travel agency desk with globes, brochures and a booking screen showing a sunny destination', palette:'deep teal and warm sand with coral accents', env:'bright agency office decorated with destination landscapes and luggage accents' }, seoSeeds:['agence de voyage','travel agency','Omra & Hajj','circuit organis\u00e9'], packStrings:PACK_TRAVELERS, noise:['travel','voyage','tours','agence'] },
-  medical: { label:'Medical clinic', regex:/(clinic|medical|doctor|hospital|\u0639\u064a\u0627\u062f|\u0637\u0628\u064a\u0628|\u0645\u0633\u062a\u0634\u0641\u0649|\u0645\u0631\u0643\u0632 \u0637\u0628)/i, services:['specialist consultations','lab tests & diagnostics','chronic disease follow-up','online appointment booking'], audience:'patients', roleLine:'medical landing pages', scene:{ subject:'professional medical clinic reception with a welcoming healthcare team', palette:'clean white and calm blue with silver accents', env:'modern medical facility with a bright reception area and subtle greenery' }, seoSeeds:['medical clinic','doctor near me','specialist consultation','medical checkup'], packStrings:PACK_PATIENT }
+  dental: { label:'Dental clinic', regex:/(dental|dentist|orthodont|\u0623\u0633\u0646\u0627\u0646)/i, services:['dental cleaning & whitening','implants','orthodontics/braces','veneers','pediatric dentistry','emergency care'], audience:'patients', roleLine:'dental landing pages', scene:{ subject:'modern dental operatory with a smiling dentist gently guiding a patient into a dental chair', palette:'white and sage green with subtle teal accents', env:'bright, organized clinic interior with modern equipment' }, seoSeeds:['dentist near me','dental clinic','teeth whitening','dental implants'], packStrings:PACK_PATIENT, keywords:['dental clinic','dentist','cabinet dentaire','dentiste','عيادة أسنان','طبيب أسنان'] },
+  beauty: { label:'Beauty salon', regex:/(beauty|salon|spa|hair|nail|\u062a\u062c\u0645\u064a\u0644|\u0635\u0627\u0644\u0648\u0646)/i, services:['hair styling & treatment','skin/facial care','nails','makeup','spa packages','membership offers'], audience:'patients', roleLine:'beauty salon landing pages', scene:{ subject:'luxe beauty treatment room with an aesthetician preparing a facial station', palette:'soft blush pink and warm gold with ivory tones', env:'elegant salon interior with ambient lighting, marble surfaces, and fresh flowers' }, seoSeeds:['beauty salon','hair salon','facial treatment','manicure near me'], packStrings:PACK_PATIENT, keywords:['beauty salon','hair salon','spa','salon de beauté','institut de beauté','coiffeur','صالون تجميل'] },
+  eye: { label:'Eye clinic', regex:/(ophthalm|optic|eye|\u0639\u064a\u0648\u0646|\u0628\u0635\u0631\u064a\u0627\u062a)/i, services:['comprehensive eye exams','LASIK & vision correction','glasses & contact lenses','pediatric ophthalmology','dry-eye treatment'], audience:'patients', roleLine:'eye clinic landing pages', scene:{ subject:'bright optometry reception with professional staff greeting a patient at the front desk', palette:'clean white and sky blue with silver accents', env:'modern eye clinic interior with display frames and natural light' }, seoSeeds:['eye clinic','optometrist','LASIK','contact lenses'], packStrings:PACK_PATIENT, keywords:['eye clinic','optician','optometrist','clinique des yeux','ophtalmologue','طبيب عيون','نظارات'] },
+  derma: { label:'Dermatology clinic', regex:/(dermatolog|skin care|\u062c\u0644\u062f\u064a)/i, services:['acne & scar treatment','laser hair removal','skin rejuvenation','mole screening','cosmetic dermatology'], audience:'patients', roleLine:'dermatology clinic landing pages', scene:{ subject:'modern dermatology consultation room with a dermatologist reviewing skin imaging', palette:'white and soft peach with warm wood accents', env:'clean, clinical yet inviting treatment room with state-of-the-art laser equipment' }, seoSeeds:['dermatologist','skin clinic','acne treatment','laser hair removal'], packStrings:PACK_PATIENT, keywords:['dermatologist','skin clinic','dermatologue','cabinet de dermatologie','طبيب جلدية','عيادة جلدية'] },
+  physio: { label:'Physiotherapy center', regex:/(physio|physical therapy|\u0639\u0644\u0627\u062c \u0637\u0628\u064a\u0639\u064a|\u062a\u0623\u0647\u064a\u0644)/i, services:['sports injury rehab','manual therapy','posture correction','post-surgery rehabilitation','home exercise programs'], audience:'patients', roleLine:'physiotherapy landing pages', scene:{ subject:'spacious physiotherapy studio with a therapist guiding a patient through recovery exercises', palette:'soft green and warm grey with natural wood tones', env:'bright rehabilitation center with exercise equipment and natural light' }, seoSeeds:['physiotherapy','physical therapy','sports rehab','back pain treatment'], packStrings:PACK_PATIENT, keywords:['physiotherapy','physical therapy','physiotherapist','kinésithérapeute','rééducation','علاج طبيعي','إعادة تأهيل'] },
+  pharmacy: { label:'Pharmacy', regex:/(pharmac|\u0635\u064a\u062f\u0644\u064a)/i, services:['medication supply & refills','free health screenings','vaccination','skin/hygiene products','delivery service'], audience:'patients', roleLine:'pharmacy landing pages', scene:{ subject:'bright modern pharmacy with a pharmacist assisting a customer at the consultation counter', palette:'clean white and fresh green with soft blue accents', env:'well-organized pharmacy interior with lit shelving and a welcoming consultation area' }, seoSeeds:['pharmacy near me','medication delivery','vaccination','pharmacie'], packStrings:PACK_PATIENT, keywords:['pharmacy','pharmacie','drugstore','صيدلية'] },
+  veterinary: { label:'Veterinary clinic', regex:/(veterinar|\bvet\b|\u0628\u064a\u0637\u0631)/i, services:['vaccinations','surgery','grooming','emergency care','dental care for pets'], audience:'patients', roleLine:'veterinary clinic landing pages', scene:{ subject:'friendly veterinary clinic with a vet gently examining a pet on the examination table', palette:'soft teal and warm beige with natural wood tones', env:'bright, caring clinic environment with pet-friendly design elements' }, seoSeeds:['veterinary clinic','vet near me','pet care','puppy vaccination'], packStrings:PACK_PATIENT, keywords:['veterinary clinic','veterinarian','vet','vétérinaire','clinique vétérinaire','طبيب بيطري'] },
+  restaurant: { label:'Restaurant', regex:/(restaurant|cafe|coffee|pizza|burger|\u0645\u0637\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0627\u0641\u064a\u0647)/i, services:['signature dishes & menu highlights','online reservation','delivery/order online','family & group offers','chef specials'], audience:'customers', roleLine:'restaurant landing pages', scene:{ subject:'inviting restaurant interior with a chef presenting a signature dish at a beautifully set table', palette:'warm amber and deep green with copper accents', env:'stylish dining space with soft pendant lighting, textured walls, and elegant table settings' }, seoSeeds:['restaurant near me','reservation','delivery','café'], packStrings:PACK_PATIENT, keywords:['restaurant','café','coffee shop','pizzeria','مطعم','مقهى'] },
+  legal: { label:'Law office', regex:/(law|attorney|legal|\u0645\u062d\u0627\u0645)/i, services:['free initial consultation','contracts & drafting','court representation','corporate legal advice'], audience:'customers', roleLine:'law firm landing pages', scene:{ subject:'elegant law office with a confident attorney seated at a mahogany desk', palette:'warm walnut wood, leather brown, and cream with brass accents', env:'refined office with floor-to-ceiling bookshelves, legal volumes, and warm ambient lighting' }, seoSeeds:['law firm','lawyer','legal consultation','avocat'], packStrings:PACK_PATIENT, keywords:['lawyer','law firm','attorney','avocat','cabinet juridique','محامي','مكتب محاماة'] },
+  plastic: { label:'Plastic & cosmetic surgery', regex:/(plastic surgeon|cosmetic surgeon|plastic surgery|chirurgie esth\u00e9tique|chirurgien esth\u00e9tique|chirurgie plastique|\u062c\u0631\u0627\u062d\u0629 \u062a\u062c\u0645\u064a\u0644|\u062a\u062c\u0645\u064a\u0644|esth\u00e9ticien)/i, services:['Rhinoplasty','Liposuction & body contouring','Breast augmentation','Botox & fillers','Blepharoplasty','Post-operative care'], audience:'patients', roleLine:'plastic surgery landing pages', scene:{ subject:'a plastic surgeon reviewing a consultation with a patient in a refined consultation lounge', palette:'warm neutral tones with soft beige and sand accents', env:'elegant aesthetic clinic consultation lounge, warm neutral tones, soft golden light, refined minimal decor' }, seoSeeds:['plastic surgeon','cosmetic surgery','rhinoplasty','botox'], packStrings:PACK_PATIENT, keywords:['plastic surgeon','plastic surgery','cosmetic surgery','chirurgie esthétique','chirurgien esthétique','جراحة تجميل'] },
+  realty: { label:'Real estate agency', regex:/(real estate|property|immobili|realtor|agence immob|\u0639\u0642\u0627\u0631)/i, services:['achat / vente','location longue & courte dur\u00e9e','gestion locative','estimation','accompagnement juridique'], audience:'clients', single:'client', roleLine:'real estate landing pages', scene:{ subject:'bright real estate agency office with an agent presenting a property listing to buyers', palette:'warm greys and deep blue with gold accents', env:'modern agency storefront with property photos and neighborhood landmarks visible' }, seoSeeds:['agence immobili\u00e8re','real estate agency','appartement \u00e0 vendre','property near me'], packStrings:PACK_CLIENTS, noise:['agence','immo','immobilier','estate','realty'], keywords:['real estate agency','real estate agent','agence immobilière','agent immobilier','immobilier','مكتب عقاري','عقار'] },
+  carrental: { label:'Car rental agency', regex:/(car rental|car hire|rent a car|location de voiture|location de voitures|location voiture|voiture de location|locauto|\u062a\u0623\u062c\u064a\u0631 \u0633\u064a\u0627\u0631\u0627\u062a)/i, services:['citadines','SUV & famille','luxe','longue dur\u00e9e','avec chauffeur','livraison a\u00e9roport 24/7'], audience:'customers', single:'customer', roleLine:'car rental landing pages', scene:{ subject:'lineup of clean rental cars in front of a modern rental office, an employee handing keys to a smiling customer', palette:'fresh blues and clean whites with orange accents', env:'bright rental lot with a reception counter and airport shuttle visible' }, seoSeeds:['location voiture','car rental','rent a car Marrakech','location voiture Marrakech'], packStrings:PACK_CUSTOMERS, noise:['car','auto','rental','location','voiture'], keywords:['car rental','rent a car','car hire','location de voiture','location voiture','location automobile','تأجير سيارات'] },
+  travel: { label:'Travel & tourism agency', regex:/(travel agency|travel agent|tour operator|voyage|tourisme|tourism|safari|circuit organis|omra|hajj|\u0633\u064a\u0627\u062d\u0629|\u0633\u0641\u0631|\u0623\u0633\u0641\u0627\u0631)/i, services:['packages Omra & Hajj','circuits organis\u00e9s','assistance visa','billets & h\u00f4tels','voyages groupes'], audience:'travelers', single:'traveler', roleLine:'travel & tourism landing pages', scene:{ subject:'travel agency desk with globes, brochures and a booking screen showing a sunny destination', palette:'deep teal and warm sand with coral accents', env:'bright agency office decorated with destination landscapes and luggage accents' }, seoSeeds:['agence de voyage','travel agency','Omra & Hajj','circuit organis\u00e9'], packStrings:PACK_TRAVELERS, noise:['travel','voyage','tours','agence'], keywords:['travel agency','tour operator','agence de voyage','voyages','circuit organisé','omra','hajj','وكالة أسفار','سياحة'] },
+  medical: { label:'Medical clinic', regex:/(clinic|medical|doctor|hospital|\u0639\u064a\u0627\u062f|\u0637\u0628\u064a\u0628|\u0645\u0633\u062a\u0634\u0641\u0649|\u0645\u0631\u0643\u0632 \u0637\u0628)/i, services:['specialist consultations','lab tests & diagnostics','chronic disease follow-up','online appointment booking'], audience:'patients', roleLine:'medical landing pages', scene:{ subject:'professional medical clinic reception with a welcoming healthcare team', palette:'clean white and calm blue with silver accents', env:'modern medical facility with a bright reception area and subtle greenery' }, seoSeeds:['medical clinic','doctor near me','specialist consultation','medical checkup'], packStrings:PACK_PATIENT, keywords:['medical clinic','doctor','general practitioner','médecin','clinique médicale','مستشفى'] }
 };
+
+const COUNTRIES = [
+  { flag:'🇲🇦', name:'Morocco', code:'MA', cities:['Casablanca','Rabat','Marrakech','Fès','Tanger','Agadir','Meknès','Oujda','Kénitra','Tétouan','Safi','El Jadida','Mohammedia','Nador','Taza','Béni Mellal','Khouribga','Settat','Berrechid','Temara'] },
+  { flag:'🇩🇿', name:'Algeria', code:'DZ', cities:['Algiers','Oran','Constantine','Annaba','Blida','Batna','Djelfa','Sétif','Sidi Bel Abbès','Tlemcen','Biskra','Mostaganem','Tizi Ouzou','Béchar','Ouargla'] },
+  { flag:'🇹🇳', name:'Tunisia', code:'TN', cities:['Tunis','Sfax','Sousse','Kairouan','Bizerte','Gabès','Ariana','Gafsa','Monastir','Sidi Bouzid','Nabeul','Djerba','La Marsa','Hammamet'] },
+  { flag:'🇱🇾', name:'Libya', code:'LY', cities:['Tripoli','Benghazi','Misrata','Al Bayda','Zawiya','Sabha','Tobruk','Gharyan','Sirte','Az Zawiyah','Derna','Khoms','Tarhuna'] },
+  { flag:'🇪🇬', name:'Egypt', code:'EG', cities:['Cairo','Alexandria','Giza','Shubra El Kheima','Port Said','Suez','Luxor','Mansoura','Tanta','Asyut','Ismailia','Faiyum','Zagazig','Aswan','Damietta','Minya'] },
+  { flag:'🇸🇩', name:'Sudan', code:'SD', cities:['Khartoum','Omdurman','Khartoum North','Port Sudan','Kassala','El Obeid','Wad Madani','Nyala','El Fasher','Atbara','Gedaref'] },
+  { flag:'🇸🇦', name:'Saudi Arabia', code:'SA', cities:['Riyadh','Jeddah','Mecca','Medina','Dammam','Khobar','Dhahran','Taif','Tabuk','Abha','Hail','Jubail','Yanbu','Al Hofuf','Buraidah','Khamis Mushait'] },
+  { flag:'🇦🇪', name:'United Arab Emirates', code:'AE', cities:['Dubai','Abu Dhabi','Sharjah','Ajman','Al Ain','Ras Al Khaimah','Fujairah','Umm Al Quwain','Dibba','Khor Fakkan'] },
+  { flag:'🇶🇦', name:'Qatar', code:'QA', cities:['Doha','Al Rayyan','Al Wakrah','Al Khor','Mesaieed','Lusail','Umm Salal','Al Daayen'] },
+  { flag:'🇰🇼', name:'Kuwait', code:'KW', cities:['Kuwait City','Hawally','Salmiya','Al Ahmadi','Farwaniya','Mishref','Jahra','Mubarak Al-Kabeer','Sabah Al-Salem'] },
+  { flag:'🇧🇭', name:'Bahrain', code:'BH', cities:['Manama','Riffa','Muharraq','Hamad Town','Isa Town','Sitra','Budaiya','Hidd','Juffair'] },
+  { flag:'🇴🇲', name:'Oman', code:'OM', cities:['Muscat','Salalah','Sohar','Nizwa','Sur','Ibri','Rustaq','Barka','Seeb','Khasab','Duqm'] },
+  { flag:'🇯🇴', name:'Jordan', code:'JO', cities:['Amman','Zarqa','Irbid','Aqaba','Madaba','Salt','Mafraq','Jerash','Karak','Tafilah'] },
+  { flag:'🇱🇧', name:'Lebanon', code:'LB', cities:['Beirut','Tripoli','Sidon','Tyre','Jounieh','Zahlé','Baalbek','Byblos','Nabatieh','Jbeil'] },
+  { flag:'🇸🇾', name:'Syria', code:'SY', cities:['Damascus','Aleppo','Homs','Latakia','Hama','Raqqa','Deir ez-Zor','Tartus','Idlib','Daraa'] },
+  { flag:'🇮🇶', name:'Iraq', code:'IQ', cities:['Baghdad','Basra','Mosul','Erbil','Karbala','Najaf','Kirkuk','Sulaymaniyah','Hilla','Nasiriyah','Ramadi'] },
+  { flag:'🇾🇪', name:'Yemen', code:'YE', cities:['Sanaa','Aden','Taiz','Hodeidah','Mukalla','Ibb','Dhamar','Sayyan','Zinjibar'] },
+  { flag:'🇲🇷', name:'Mauritania', code:'MR', cities:['Nouakchott','Nouadhibou','Kiffa','Rosso','Kaédi','Zouérat','Atar','Boutilimit'] },
+  { flag:'🇫🇷', name:'France', code:'FR', cities:['Paris','Marseille','Lyon','Toulouse','Nice','Nantes','Montpellier','Strasbourg','Bordeaux','Lille','Rennes','Reims','Toulon','Grenoble','Dijon','Angers','Nîmes','Aix-en-Provence','Annecy','Saint-Denis'] },
+  { flag:'🇧🇪', name:'Belgium', code:'BE', cities:['Brussels','Antwerp','Ghent','Charleroi','Liège','Bruges','Namur','Leuven','Mons','Tournai','Ostend'] },
+  { flag:'🇨🇭', name:'Switzerland', code:'CH', cities:['Zurich','Geneva','Basel','Lausanne','Bern','Winterthur','Lucerne','Lugano','St. Gallen','Fribourg','Neuchâtel'] },
+  { flag:'🇨🇦', name:'Canada', code:'CA', cities:['Montreal','Toronto','Vancouver','Quebec City','Ottawa','Calgary','Edmonton','Hamilton','Winnipeg','Halifax','Saskatoon','Gatineau','Mississauga'] },
+  { flag:'🇸🇳', name:'Senegal', code:'SN', cities:['Dakar','Touba','Thiès','Rufisque','Saint-Louis','Kaolack','Ziguinchor','Diourbel','Mbour','Louga'] },
+  { flag:'🇨🇮', name:'Ivory Coast', code:'CI', cities:['Abidjan','Bouaké','Daloa','Yamoussoukro','San-Pédro','Korhogo','Man','Divo','Gagnoa','Abengourou','Séguéla'] },
+  { flag:'🇲🇱', name:'Mali', code:'ML', cities:['Bamako','Sikasso','Mopti','Koutiala','Kayes','Ségou','Gao','Kati','Tombouctou'] },
+  { flag:'🇳🇪', name:'Niger', code:'NE', cities:['Niamey','Zinder','Maradi','Agadez','Tahoua','Dosso','Birni N Konni','Arlit','Diffa'] },
+  { flag:'🇧🇫', name:'Burkina Faso', code:'BF', cities:['Ouagadougou','Bobo-Dioulasso','Koudougou','Ouahigouya','Banfora','Kaya','Fada N Gourma','Dédougou'] },
+  { flag:'🇧🇯', name:'Benin', code:'BJ', cities:['Cotonou','Porto-Novo','Parakou','Abomey-Calavi','Djougou','Bohicon','Natitingou','Lokossa','Ouidah'] },
+  { flag:'🇹🇬', name:'Togo', code:'TG', cities:['Lomé','Sokodé','Kara','Kpalimé','Atakpamé','Dapaong','Tsévié','Aného'] },
+  { flag:'🇬🇳', name:'Guinea', code:'GN', cities:['Conakry','Nzérékoré','Kankan','Kindia','Labé','Guéckédou','Mamou','Boké','Kissidougou'] },
+  { flag:'🇨🇲', name:'Cameroon', code:'CM', cities:['Douala','Yaoundé','Garoua','Bamenda','Bafoussam','Maroua','Ngaoundéré','Kribi','Limbe','Edea','Bertoua'] },
+  { flag:'🇬🇦', name:'Gabon', code:'GA', cities:['Libreville','Port-Gentil','Franceville','Oyem','Moanda','Lambaréné','Tchibanga'] },
+  { flag:'🇨🇩', name:'DR Congo', code:'CD', cities:['Kinshasa','Lubumbashi','Mbuji-Mayi','Kisangani','Kananga','Bukavu','Goma','Kolwezi','Likasi','Matadi','Mbandaka'] },
+  { flag:'🇹🇩', name:'Chad', code:'TD', cities:['N Djamena','Moundou','Sarh','Abéché','Kelo','Am Timan','Bongor','Mongo'] },
+  { flag:'🇲🇬', name:'Madagascar', code:'MG', cities:['Antananarivo','Toamasina','Antsirabe','Mahajanga','Fianarantsoa','Toliara','Antsiranana','Sambava'] },
+  { flag:'🇰🇲', name:'Comoros', code:'KM', cities:['Moroni','Mutsamudu','Fomboni','Domoni','Mitsamiouli'] },
+  { flag:'🇷🇼', name:'Rwanda', code:'RW', cities:['Kigali','Butare','Gitarama','Ruhengeri','Gisenyi','Byumba','Cyangugu','Nyanza'] },
+  { flag:'🇧🇮', name:'Burundi', code:'BI', cities:['Bujumbura','Gitega','Ngozi','Rumonge','Muyinga','Kayanza'] },
+  { flag:'🇬🇧', name:'United Kingdom', code:'GB', cities:['London','Manchester','Birmingham','Leeds','Glasgow','Liverpool','Bristol','Sheffield','Newcastle','Nottingham','Brighton','Cardiff','Edinburgh','Belfast','Leicester','Southampton','Oxford','Cambridge'] },
+  { flag:'🇺🇸', name:'United States', code:'US', cities:['New York','Los Angeles','Chicago','Houston','Miami','San Francisco','Seattle','Boston','Dallas','Atlanta','Washington DC','Denver','Philadelphia','Phoenix','Detroit','San Diego','Las Vegas','Austin','Orlando','Nashville'] },
+  { flag:'🇮🇪', name:'Ireland', code:'IE', cities:['Dublin','Cork','Limerick','Galway','Waterford','Kilkenny','Sligo','Athlone','Drogheda','Wexford'] },
+  { flag:'🇦🇺', name:'Australia', code:'AU', cities:['Sydney','Melbourne','Brisbane','Perth','Adelaide','Canberra','Gold Coast','Hobart','Darwin','Newcastle','Cairns','Geelong'] },
+  { flag:'🇳🇿', name:'New Zealand', code:'NZ', cities:['Auckland','Wellington','Christchurch','Hamilton','Tauranga','Dunedin','Napier','Queenstown','Palmerston North','Rotorua'] },
+  { flag:'🇳🇬', name:'Nigeria', code:'NG', cities:['Lagos','Abuja','Kano','Ibadan','Port Harcourt','Benin City','Kaduna','Enugu','Onitsha','Aba','Jos','Ilorin'] },
+  { flag:'🇬🇭', name:'Ghana', code:'GH', cities:['Accra','Kumasi','Tamale','Takoradi','Cape Coast','Tema','Sunyani','Koforidua','Ho','Obuasi'] },
+  { flag:'🇰🇪', name:'Kenya', code:'KE', cities:['Nairobi','Mombasa','Kisumu','Nakuru','Eldoret','Thika','Nyeri','Machakos','Naivasha','Garissa'] },
+  { flag:'🇹🇿', name:'Tanzania', code:'TZ', cities:['Dar es Salaam','Dodoma','Mwanza','Arusha','Mbeya','Zanzibar','Morogoro','Tanga','Tabora','Kigoma'] },
+  { flag:'🇿🇦', name:'South Africa', code:'ZA', cities:['Cape Town','Johannesburg','Durban','Pretoria','Port Elizabeth','Bloemfontein','East London','Polokwane','Nelspruit','Stellenbosch'] },
+  { flag:'🇹🇷', name:'Turkey', code:'TR', cities:['Istanbul','Ankara','Izmir','Bursa','Antalya','Adana','Gaziantep','Konya','Mersin','Kayseri','Trabzon','Bodrum'] }
+];
 
 const PROF_CATS = Object.entries(VERTICALS).map(([id,v]) => [id, v.regex, v.label]);
 const CAT_LABEL = Object.fromEntries(PROF_CATS.map(([id,,label]) => [id,label]));
@@ -1919,13 +1994,120 @@ function switchMode(mode){
   $('#modeProspectBtn').classList.toggle('active', !isExtract);
   logLine('Mode: ' + mode);
 }
-function quickPick(q){
-  const inp = $('#p_prof');
-  if(!inp) return;
-  inp.value = q;
-  inp.focus();
-  logLine('🎯 Quick pick: ' + q, 'info');
+/* ── Guided Search (v2.9.2): profession groups + country→city cascade ── */
+const GS = { country:null, suppressFocus:false };
+function gsCloseAll(){
+  ['#gsProf','#gsCountry','#gsCity'].forEach(id=>{ const el=$(id); if(el) el.classList.add('hidden'); });
+  const pp=$('#p_prof'), cc=$('#p_city');
+  if(pp) pp.setAttribute('aria-expanded','false');
+  if(cc) cc.setAttribute('aria-expanded','false');
 }
+function gsSetActive(items, idx){
+  items.forEach((el,i)=>el.classList.toggle('active', i===idx));
+  if(items[idx]) items[idx].scrollIntoView({block:'nearest'});
+}
+function gsNavKeys(e, panel, onPick){
+  if(!panel || e.key==='Tab'){ return; }
+  const items = panel.querySelectorAll('.gs-item');
+  let idx = [...items].findIndex(el=>el.classList.contains('active'));
+  if(e.key==='ArrowDown'){ e.preventDefault(); idx = idx < items.length-1 ? idx+1 : (items.length?0:-1); gsSetActive(items,idx); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); idx = idx > 0 ? idx-1 : (items.length? items.length-1 : -1); gsSetActive(items,idx); }
+  else if(e.key==='Enter'){
+    if(items.length && idx>=0){ e.preventDefault(); onPick(items[idx].dataset.val); }
+    else { e.preventDefault(); gsCloseAll(); }
+  } else if(e.key==='Escape'){ e.preventDefault(); gsCloseAll(); }
+}
+function gsPickProf(q, inp){
+  inp.value = q;
+  gsCloseAll();
+  GS.suppressFocus = true;
+  inp.focus();
+  logLine('🎯 Profession: ' + q, 'info');
+}
+function gsProfHtml(filter){
+  const q = (filter||'').toLowerCase().trim();
+  let html='', shown=0;
+  for(const [id,v] of Object.entries(VERTICALS)){
+    const kws = [v.label, ...(v.keywords||[])];
+    const mk = kws.filter(k=>!q || k.toLowerCase().includes(q));
+    if(!mk.length) continue;
+    const icon = CAT_ICONS[id] ? CAT_ICONS[id]+' ' : '';
+    let items='';
+    mk.forEach(k=>{ items += '<div class="gs-item" role="option" data-val="'+esc(k)+'">'+icon+esc(k)+'</div>'; shown++; });
+    html += '<div class="gs-head">'+esc(v.label)+'</div>'+items;
+  }
+  if(!shown) return '<div class="gs-empty">No suggestion — type freely, then press Search</div>';
+  return html;
+}
+function gsOpenProf(){
+  const panel=$('#gsProf'), inp=$('#p_prof');
+  if(GS.suppressFocus){ GS.suppressFocus=false; return; }
+  if(!panel || !inp) return;
+  panel.innerHTML = gsProfHtml(inp.value);
+  panel.classList.toggle('hidden', !panel.querySelector('.gs-item'));
+  inp.setAttribute('aria-expanded', panel.classList.contains('hidden') ? 'false' : 'true');
+}
+function gsCountryBtnLabel(){
+  const b=$('#p_countryBtn');
+  if(b) b.textContent = GS.country ? (GS.country.flag + ' ' + GS.country.name) : '🌍 Select country';
+}
+function gsCountryHtml(){
+  let html = '<div class="gs-item gs-reset" role="option" data-code=""><span>🌐</span> No country (free search)</div>';
+  COUNTRIES.forEach(c=>{ html += '<div class="gs-item" role="option" data-code="'+esc(c.code)+'">'+c.flag+' '+esc(c.name)+'</div>'; });
+  return html;
+}
+function gsToggleCountry(e){
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  const panel=$('#gsCountry');
+  if(!panel) return;
+  const isOpen = !panel.classList.contains('hidden');
+  gsCloseAll();
+  if(isOpen) return;
+  panel.innerHTML = gsCountryHtml();
+  panel.classList.remove('hidden');
+}
+function gsPickCountry(code){
+  GS.country = code ? (COUNTRIES.find(c=>c.code===code)||null) : null;
+  gsCountryBtnLabel();
+  gsCloseAll();
+  const inp=$('#p_city');
+  GS.suppressFocus = true;
+  if(inp) inp.focus();
+  if(GS.country && inp){ const cp=$('#gsCity'); if(cp){ cp.innerHTML = gsCityHtml(''); cp.classList.remove('hidden'); inp.setAttribute('aria-expanded','true'); } }
+  logLine(GS.country ? '🌍 Country: ' + GS.country.name : '🌐 Country cleared', 'info');
+}
+function gsCityHtml(filter){
+  if(!GS.country) return '<div class="gs-empty">Pick a country above, or type any city</div>';
+  const q = (filter||'').toLowerCase().trim();
+  const cities = GS.country.cities.filter(c=>!q || c.toLowerCase().includes(q));
+  if(!cities.length) return '<div class="gs-empty">No match — type freely, then press Search</div>';
+  return cities.map(c=>'<div class="gs-item" role="option" data-val="'+esc(c)+'">'+esc(c)+'</div>').join('');
+}
+function gsOpenCity(){
+  const panel=$('#gsCity'), inp=$('#p_city');
+  if(GS.suppressFocus){ GS.suppressFocus=false; return; }
+  if(!panel || !inp) return;
+  if(!GS.country){ panel.innerHTML = gsCityHtml(''); panel.classList.remove('hidden'); inp.setAttribute('aria-expanded','true'); return; }
+  panel.innerHTML = gsCityHtml(inp.value);
+  panel.classList.toggle('hidden', !panel.querySelector('.gs-item'));
+  inp.setAttribute('aria-expanded', panel.classList.contains('hidden') ? 'false' : 'true');
+}
+function gsPickCity(q, inp){
+  inp.value = q;
+  gsCloseAll();
+  GS.suppressFocus = true;
+  inp.focus();
+  logLine('🏙 City: ' + q, 'info');
+}
+function gsBindGuided(){
+  const pp=$('#p_prof'), pc=$('#gsProf'), cty=$('#p_city'), cpanel=$('#gsCity'), gpanel=$('#gsCountry');
+  if(pp){ pp.addEventListener('focus', gsOpenProf); pp.addEventListener('click', ()=>{ if(pp.value!==undefined && pc.classList.contains('hidden')) gsOpenProf(); }); pp.addEventListener('input', gsOpenProf); pp.addEventListener('keydown', e=>gsNavKeys(e, pc, v=>gsPickProf(v,pp))); }
+  if(pc){ pc.addEventListener('mousedown', e=>{ const it=e.target.closest('.gs-item'); if(it){ e.preventDefault(); gsPickProf(it.dataset.val, pp); } }); }
+  if(cty){ cty.addEventListener('focus', gsOpenCity); cty.addEventListener('click', ()=>{ if(cpanel.classList.contains('hidden')) gsOpenCity(); }); cty.addEventListener('input', gsOpenCity); cty.addEventListener('keydown', e=>gsNavKeys(e, cpanel, v=>gsPickCity(v,cty))); }
+  if(gpanel){ gpanel.addEventListener('mousedown', e=>{ const it=e.target.closest('.gs-item'); if(it){ e.preventDefault(); gsPickCountry(it.dataset.code); } }); }
+  document.addEventListener('click', e=>{ if(!e.target.closest('.gs-wrap') && !e.target.closest('#gsCountry')) gsCloseAll(); });
+}
+gsBindGuided();
 const analyze=lockGate(_analyzeOrig);
 const CITY_TOKENS = new Set(['riyadh','jeddah','dammam','dhahran','khobar','mecca','makkah','medina','madina','jubail','yanbu','tabuk','abha','hofuf','hail','arar','buraidah','qassim','taif','khamis','najran','jizan','dubai','abu dhabi','sharjah','ajman','ras al khaimah','fujairah','al ain','doha','manama','muharraq','kuwait','salmiya','hawally','muscat','salalah','cairo','giza','alexandria','casablanca','rabat','marrakech','tangier','tunis']);
 function prospectBaseName(name, cityHint){
