@@ -212,7 +212,7 @@ pre.prompt[contenteditable="true"]{outline:none}
     </div>
     <div id="prospectorPanel" class="hidden">
       <label style="color:var(--ok); font-weight:600; font-size:14px">🎯 Prospector Mode</label>
-      <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Filtered to show those WITHOUT a website — your ideal clients.</p>
+      <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Toggle the option below to show only those WITHOUT a website.</p>
       <div class="grid2">
         <div><label>Profession</label><input id="p_prof" placeholder="dental clinic"></div>
         <div><label>City</label><input id="p_city" placeholder="Riyadh"></div>
@@ -220,7 +220,7 @@ pre.prompt[contenteditable="true"]{outline:none}
         <div><label>Min reviews</label><input id="p_minReviews" type="number" value="0" min="0"></div>
       </div>
       <label class="toggle" style="margin-top:14px">
-        <input type="checkbox" id="p_noWeb" checked>
+        <input type="checkbox" id="p_noWeb">
         <span class="slider"></span>
         <span>Show ONLY businesses without a website</span>
       </label>
@@ -1884,7 +1884,7 @@ async function _prospectSearchOrig(){
   const city = ($('#p_city')?.value||'').trim();
   const minRating = parseFloat($('#p_minRating')?.value||'0') || 0;
   const minReviews = parseInt($('#p_minReviews')?.value||'0') || 0;
-  const noWebOnly = $('#p_noWeb')?.checked !== false;
+  const noWebOnly = $('#p_noWeb')?.checked === true;
 
   if(!prof || !city){ toast('Please enter both profession and city'); return; }
 
