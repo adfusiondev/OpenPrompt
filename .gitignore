@@ -27,3 +27,4 @@ npm-debug.log*
 # Electron build artifacts
 node_modules/
 desktop/dist/
+.vercel

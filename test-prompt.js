@@ -1,17 +1,20 @@
-// Extract the key parts from index.html
+// Carrental fixture test — mirrored Phase-2 logic from index.html
 const client = {
-  name: "Dr. Smith Dental Clinic",
-  prof: "Dentist",
-  city: "Paris",
-  address: "123 Rue de Rivoli",
-  phone: "+33 1 23 45 67 89",
-  rating: "4.8",
-  reviews: "127",
-  website_url: "https://smith-dental.fr",
+  name: "Car Rental Ltd Location Voiture Marrakech",
+  prof: "Car rental agency",
+  city: "Amitaf 40000",
+  address: "Bureau 11 Rue Loubnane, Amitaf 40000, Morocco",
+  phone: "212661601990",
+  rating: "4.9",
+  reviews: "688",
+  website_url: "https://www.carrental-ltd.com/",
   identity: "no",
-  hours: "Mon-Fri 9am-6pm",
-  notes: "Premium dental clinic specializing in implants",
-  selectedUSP: "Same-day implants with 3D planning"
+  hours: "",
+  notes: "",
+  rawUrl: "https://maps.google.com/maps/place/?q=place_id:ChIJBXIh6o7urw0R1dmLo2YJgtw",
+  lat: 31.6373543,
+  lng: -8.0105591,
+  selectedUSP: "Explore Marrakech seamlessly with Marrakech's highest-rated 4.9-star trusted car rental service."
 };
 
 const options = {
@@ -21,46 +24,50 @@ const options = {
   variant: "premium"
 };
 
-const SERVICES_HINT = {
-  dental: "dental cleaning & whitening, implants, orthodontics/braces, veneers, pediatric dentistry, emergency care"
+const VERTICALS = {
+  dental: { label: "Dental clinic", services: ["dental cleaning & whitening", "implants", "orthodontics/braces", "veneers", "pediatric dentistry", "emergency care"], audience: "patients", single: "patient", roleLine: "dental landing pages" },
+  carrental: { label: "Car rental agency", services: ["citadines", "SUV & famille", "luxe", "longue durée", "avec chauffeur", "livraison aéroport 24/7"], audience: "customers", single: "customer", roleLine: "car rental landing pages" }
 };
+const SERVICES_HINT = Object.fromEntries(Object.entries(VERTICALS).map(([id, v]) => [id, v.services.join(', ')]));
 
 function detectProfessionId(text) {
   if (!text) return null;
-  if (/dentist|dental|teeth/i.test(text)) return "dental";
+  if (/car rental|car hire|rent a car|location de voiture|location voiture|voiture de location|locauto/i.test(text)) return "carrental";
+  if (/dental|dentist|teeth/i.test(text)) return "dental";
   return null;
 }
 
-const SERVICES_HINT_OBJ = SERVICES_HINT;
 const lockGate = fn => fn;
 
 const TIER_BRIEFS = {
   en: {
     premium: {
       title: "Premium and immersive landing page",
-      brief: `Create an exceptional landing page for [NAME], a [PROFESSION] in [CITY] — flagship clinic level.
+      brief: `Create an exceptional landing page for [NAME], a [PROFESSION] in [CITY] — flagship business level.
 
 Priority: visual storytelling, refined details, immersive experience.
 Tone: exclusive, editorial, discreet luxury (not flashy).
-Structure: cinematic hero + patient journey + signature services + gallery + testimonials + premium FAQ + map + VIP CTA.
+Structure: cinematic hero + customer journey + signature services + gallery + testimonials + premium FAQ + map + VIP CTA.
 Main CTA: one-click WhatsApp booking.
 
-Total freedom: sophisticated palette, editorial typography, subtle animations, micro-interactions. I want a result worthy of a high-end flagship clinic.
+Total freedom: sophisticated palette, editorial typography, subtle animations, micro-interactions. I want a result worthy of a high-end flagship business.
 
-ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.
-
-ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
+ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.`
     }
   }
 };
 
 function buildPrompts() {
+  const catId = detectProfessionId((client.prof || '') + ' ' + (client.name || ''));
+  const vert = VERTICALS[catId];
+  const wsNoun = (vert && vert.single) || 'patient';
+  const audLabel = (vert && vert.audience) || 'patients';
   const LANG_FULL = {
     en: 'English — LTR layout, use Inter font'
   }[options.lang];
 
   const CTA = {
-    whatsapp: `WhatsApp booking — real number: ${client.phone}. CRITICAL JS REQUIREMENT: Include a complete, functional <script> tag before </body> that (1) selects the booking form by id or tag, (2) intercepts its submit event with e.preventDefault(), (3) extracts the name, phone, and service fields from the form, (4) builds the message body including the service name and patient name, and (5) opens https://wa.me/${client.phone.replace(/[^0-9]/g, '')}?text={encoded_message} in a new tab via window.open(). Use encodeURIComponent for the text parameter. The script must be fully working production code — NO mock alerts, NO placeholder callbacks, NO console.log stubs. If the form has no id, add one (e.g. id="bookingForm").`
+    whatsapp: `WhatsApp booking — real number: ${client.phone}. CRITICAL JS REQUIREMENT: Include a complete, functional <script> tag before </body> that (1) selects the booking form by id or tag, (2) intercepts its submit event with e.preventDefault(), (3) extracts the name, phone, and service fields from the form, (4) builds the message body including the service name and ${wsNoun} name, and (5) opens https://wa.me/${client.phone.replace(/[^0-9]/g, '')}?text={encoded_message} in a new tab via window.open(). Use encodeURIComponent for the text parameter. The script must be fully working production code — NO mock alerts, NO placeholder callbacks, NO console.log stubs. If the form has no id, add one (e.g. id="bookingForm").`
   }[options.cta];
 
   const TONE = {
@@ -70,7 +77,7 @@ function buildPrompts() {
     modern: 'modern, tech-forward'
   }[options.tone];
 
-  const servicesHint = SERVICES_HINT_OBJ[detectProfessionId((client.prof || '') + ' ' + (client.name || ''))] || 'top 4-6 core services with short benefit-driven blurbs';
+  const servicesHint = SERVICES_HINT[catId] || 'top 4-6 core services with short benefit-driven blurbs';
   const WEB = client.website_url
     ? `Client has a website (${client.website_url}) — build a conversion-focused landing page.`
     : 'Client has NO website — this will be their first digital presence.';
@@ -81,6 +88,7 @@ function buildPrompts() {
   const USP = client.selectedUSP ? `PRIMARY USP TO EMPHASIZE: ${client.selectedUSP}` : '';
   const INSIGHTS = '';
   const COMPETITIVE = '';
+  const BUILD_ORDER = options.lang.split('_').length > 1 ? `\nBUILD ORDER...` : '';
 
   const _briefLang = options.lang[0] === 'f' ? 'fr' : options.lang[0] === 'a' ? 'ar' : 'en';
   const _tierKey = options.variant in TIER_BRIEFS[_briefLang] ? options.variant : 'conservative';
@@ -93,7 +101,7 @@ ${_brief.brief
     .replace(/\[PROFESSION\]/g, client.prof || '[PROFESSION]')
     .replace(/\[CITY\]/g, client.city || '[CITY]')}`;
 
-  const landing = `You are a senior web designer specializing in medical landing pages. Build a complete page:
+  const landing = `You are a senior web designer specializing in ${vert && vert.roleLine ? vert.roleLine : 'medical landing pages'}. Build a complete page:
 
 CLIENT DATA:
 - Name: ${client.name}
@@ -106,10 +114,10 @@ ${HOURS}
 ${PROOF}
 
 LOCATION DATA (use exactly):
-- Google Maps link: (none)
-- Coordinates: (derive from address)
-- Map embed src: https://maps.google.com/maps?q=${encodeURIComponent(client.address)}&z=15&output=embed
-- Directions link: https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(client.address)}
+- Google Maps link: ${client.rawUrl || '(none)'}
+- Coordinates: ${client.lat && client.lng ? client.lat + ',' + client.lng : '(derive from address)'}
+- Map embed src: https://maps.google.com/maps?q=${client.lat && client.lng ? client.lat + ',' + client.lng : encodeURIComponent(client.address)}&z=15&output=embed
+- Directions link: https://www.google.com/maps/dir/?api=1&destination=${client.lat && client.lng ? client.lat + ',' + client.lng : encodeURIComponent(client.address)}
 
 PAGE LANGUAGE: ${LANG_FULL}
 CONTEXT: ${WEB} ${IDENT} ${NOTES}
@@ -126,9 +134,20 @@ MANDATORY PAGE FEATURES (apply to every version):
 4. Final self-check before delivering: responsive layout, accessibility (contrast, focus states, aria labels), and nothing existing broken.
 
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast. Services to feature (suggest): ${servicesHint}. Embed a LIVE Google Map using the embed src above (keyless iframe), with a prominent 'Get Directions' button linking to the directions link — do NOT use a placeholder map.
-OUTPUT: single self-contained HTML/CSS/JS file.`;
+OUTPUT: single self-contained HTML/CSS/JS file.${BUILD_ORDER}`;
 
   return landing;
 }
 
-console.log(buildPrompts());
+const P = buildPrompts();
+const checked = {
+  roleLine: P.includes('specializing in car rental landing pages'),
+  whatsappCustomerName: P.includes('including the service name and customer name'),
+  servicesExact: P.includes('citadines, SUV & famille, luxe, longue durée, avec chauffeur, livraison aéroport 24/7'),
+  noClinic: !/\bclinic\b/i.test(P),
+  noPatient: !/\bpatient\b/i.test(P),
+  noMedical: !/\bmedical\b/i.test(P)
+};
+console.log('CHECKS:', JSON.stringify(checked, null, 2));
+console.log('\n===== LANDING PROMPT =====\n');
+console.log(P);

@@ -212,12 +212,17 @@ pre.prompt[contenteditable="true"]{outline:none}
     </div>
     <div id="prospectorPanel" class="hidden">
       <label style="color:var(--ok); font-weight:600; font-size:14px">🎯 Prospector Mode</label>
-      <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Filtered to show those WITHOUT a website — your ideal clients.</p>
+      <p class="sub" style="font-size:12px; margin:4px 0 12px">Find local businesses by profession + city. Toggle the option below to show only those WITHOUT a website.</p>
       <div class="grid2">
         <div><label>Profession</label><input id="p_prof" placeholder="dental clinic"></div>
         <div><label>City</label><input id="p_city" placeholder="Riyadh"></div>
         <div><label>Min rating ⭐</label><input id="p_minRating" type="number" step="0.1" value="0" min="0" max="5"></div>
         <div><label>Min reviews</label><input id="p_minReviews" type="number" value="0" min="0"></div>
+      </div>
+      <div class="row" style="margin-top:10px; gap:6px; flex-wrap:wrap">
+        <button class="btn small" onclick="quickPick('agence immobili\u00e8re')">🏠 Agence immobili&egrave;re</button>
+        <button class="btn small" onclick="quickPick('location voiture')">🚗 Location voiture</button>
+        <button class="btn small" onclick="quickPick('agence de voyage')">✈️ Agence de voyage</button>
       </div>
       <label class="toggle" style="margin-top:14px">
         <input type="checkbox" id="p_noWeb">
@@ -339,8 +344,12 @@ pre.prompt[contenteditable="true"]{outline:none}
       <button class="tab" onclick="showTab('identity',this)">Visual Identity</button>
       <button class="tab" onclick="showTab('outreach',this)">Outreach Message</button>
       <button class="tab" onclick="showTab('images',this)">🎨 Image Prompts</button>
+      <button class="tab" onclick="showTab('clientdata',this)">📋 Client Data</button>
+      <button class="tab" onclick="showTab('analysis',this)">📊 Analysis</button>
     </div>
     <pre class="prompt" id="promptOut" oninput="lastPrompts[currentTab] = this.innerText"></pre>
+    <div id="clientDataTab" class="tab-content hidden"></div>
+    <div id="analysisTab" class="tab-content hidden"></div>
     <div class="row">
       <button class="btn ghost" id="editBtn" onclick="toggleEdit()">✏️ Edit</button>
       <button class="btn" onclick="copyCurrent()">⧉ Copy</button>
@@ -829,33 +838,51 @@ async function callGemini(body, timeoutMs){
   return { ok:false, error:lastErr, rateLimited: allRateLimited };
 }
 
-const PROF_CATS = [
-  ['dental',     /(dental|dentist|orthodont|\u0623\u0633\u0646\u0627\u0646)/i, 'Dental clinic'],
-  ['beauty',     /(beauty|salon|spa|hair|nail|\u062a\u062c\u0645\u064a\u0644|\u0635\u0627\u0644\u0648\u0646)/i, 'Beauty salon'],
-  ['eye',        /(ophthalm|optic|eye|\u0639\u064a\u0648\u0646|\u0628\u0635\u0631\u064a\u0627\u062a)/i, 'Eye clinic'],
-  ['derma',      /(dermatolog|skin care|\u062c\u0644\u062f\u064a)/i, 'Dermatology clinic'],
-  ['physio',     /(physio|physical therapy|\u0639\u0644\u0627\u062c \u0637\u0628\u064a\u0639\u064a|\u062a\u0623\u0647\u064a\u0644)/i, 'Physiotherapy center'],
-  ['pharmacy',   /(pharmac|\u0635\u064a\u062f\u0644\u064a)/i, 'Pharmacy'],
-  ['veterinary', /(veterinar|\bvet\b|\u0628\u064a\u0637\u0631)/i, 'Veterinary clinic'],
-  ['restaurant', /(restaurant|cafe|coffee|pizza|burger|\u0645\u0637\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0627\u0641\u064a\u0647)/i, 'Restaurant'],
-  ['legal',      /(law|attorney|legal|\u0645\u062d\u0627\u0645)/i, 'Law office'],
-  ['plastic',    /(plastic surgeon|cosmetic surgeon|plastic surgery|chirurgie esth\u00e9tique|chirurgien esth\u00e9tique|chirurgie plastique|\u062c\u0631\u0627\u062d\u0629 \u062a\u062c\u0645\u064a\u0644|\u062a\u062c\u0645\u064a\u0644|esth\u00e9ticien)/i, 'Plastic & cosmetic surgery'],
-  ['medical',    /(clinic|medical|doctor|hospital|\u0639\u064a\u0627\u062f|\u0637\u0628\u064a\u0628|\u0645\u0633\u062a\u0634\u0641\u0649|\u0645\u0631\u0643\u0632 \u0637\u0628)/i, 'Medical clinic']
-];
-const CAT_LABEL = Object.fromEntries(PROF_CATS.map(([id,,label]) => [id,label]));
-const SERVICES_HINT = {
-  dental: 'dental cleaning & whitening, implants, orthodontics/braces, veneers, pediatric dentistry, emergency care',
-  beauty: 'hair styling & treatment, skin/facial care, nails, makeup, spa packages, membership offers',
-  eye: 'comprehensive eye exams, LASIK & vision correction, glasses & contact lenses, pediatric ophthalmology, dry-eye treatment',
-  derma: 'acne & scar treatment, laser hair removal, skin rejuvenation, mole screening, cosmetic dermatology',
-  physio: 'sports injury rehab, manual therapy, posture correction, post-surgery rehabilitation, home exercise programs',
-  pharmacy: 'medication supply & refills, free health screenings, vaccination, skin/hygiene products, delivery service',
-  veterinary: 'vaccinations, surgery, grooming, emergency care, dental care for pets',
-  restaurant: 'signature dishes & menu highlights, online reservation, delivery/order online, family & group offers, chef specials',
-  legal: 'free initial consultation, contracts & drafting, court representation, corporate legal advice',
-  plastic: 'Rhinoplasty, Liposuction & body contouring, Breast augmentation, Botox & fillers, Blepharoplasty, Post-operative care',
-  medical: 'specialist consultations, lab tests & diagnostics, chronic disease follow-up, online appointment booking'
+const PACK_PATIENT = {
+  fr:  { reviewsTitle:'Avis de nos patientes', assetLine:'Vos patients vous font déjà confiance.', gapConsequence:'Les patients finissent chez les concurrents visibles.', noun:'patientes' },
+  en:  { reviewsTitle:'What Patients Say', assetLine:'Your patients already trust you.', gapConsequence:'Patients end up with visible competitors instead.', noun:'patients' },
+  ar:  { reviewsTitle:'آراء مرضانا', assetLine:'مرضاك يثقون بك بالفعل.', gapConsequence:'المرضى يذهبون إلى المنافسين الظاهرين بدلاً من ذلك.', noun:'مريضًا' }
 };
+
+const PACK_CLIENTS = {
+  fr:  { reviewsTitle:'Ce que disent nos clients', assetLine:'Vos clients vous font déjà confiance.', gapConsequence:'Les clients finissent chez les concurrents visibles.', noun:'clients' },
+  en:  { reviewsTitle:'What Clients Say', assetLine:'Your clients already trust you.', gapConsequence:'Clients end up with visible competitors instead.', noun:'clients' },
+  ar:  { reviewsTitle:'ماذا يقول عملاؤنا', assetLine:'عملاؤك يثقون بك بالفعل.', gapConsequence:'العملاء يذهبون إلى المنافسين الظاهرين بدلاً من ذلك.', noun:'عميلًا' }
+};
+
+const PACK_CUSTOMERS = {
+  fr:  { reviewsTitle:'Ce que disent nos clients', assetLine:'Vos clients vous font déjà confiance.', gapConsequence:'Les clients finissent chez les concurrents visibles.', noun:'clients' },
+  en:  { reviewsTitle:'What Customers Say', assetLine:'Your customers already trust you.', gapConsequence:'Customers end up with visible competitors instead.', noun:'customers' },
+  ar:  { reviewsTitle:'ماذا يقول عملاؤنا', assetLine:'عملاؤك يثقون بك بالفعل.', gapConsequence:'العملاء يذهبون إلى المنافسين الظاهرين بدلاً من ذلك.', noun:'عميلًا' }
+};
+
+const PACK_TRAVELERS = {
+  fr:  { reviewsTitle:'Ce que disent les voyageurs', assetLine:'Vos voyageurs vous font déjà confiance.', gapConsequence:'Les voyageurs finissent chez les concurrents visibles.', noun:'voyageurs' },
+  en:  { reviewsTitle:'What Travelers Say', assetLine:'Your travelers already trust you.', gapConsequence:'Travelers end up with visible competitors instead.', noun:'travelers' },
+  ar:  { reviewsTitle:'ماذا يقول المسافرون', assetLine:'مسافروك يثقون بك بالفعل.', gapConsequence:'المسافرون يذهبون إلى المنافسين الظاهرين بدلاً من ذلك.', noun:'مسافرًا' }
+};
+
+const VERTICALS = {
+  dental: { label:'Dental clinic', regex:/(dental|dentist|orthodont|\u0623\u0633\u0646\u0627\u0646)/i, services:['dental cleaning & whitening','implants','orthodontics/braces','veneers','pediatric dentistry','emergency care'], audience:'patients', roleLine:'dental landing pages', scene:{ subject:'modern dental operatory with a smiling dentist gently guiding a patient into a dental chair', palette:'white and sage green with subtle teal accents', env:'bright, organized clinic interior with modern equipment' }, seoSeeds:['dentist near me','dental clinic','teeth whitening','dental implants'], packStrings:PACK_PATIENT },
+  beauty: { label:'Beauty salon', regex:/(beauty|salon|spa|hair|nail|\u062a\u062c\u0645\u064a\u0644|\u0635\u0627\u0644\u0648\u0646)/i, services:['hair styling & treatment','skin/facial care','nails','makeup','spa packages','membership offers'], audience:'patients', roleLine:'beauty salon landing pages', scene:{ subject:'luxe beauty treatment room with an aesthetician preparing a facial station', palette:'soft blush pink and warm gold with ivory tones', env:'elegant salon interior with ambient lighting, marble surfaces, and fresh flowers' }, seoSeeds:['beauty salon','hair salon','facial treatment','manicure near me'], packStrings:PACK_PATIENT },
+  eye: { label:'Eye clinic', regex:/(ophthalm|optic|eye|\u0639\u064a\u0648\u0646|\u0628\u0635\u0631\u064a\u0627\u062a)/i, services:['comprehensive eye exams','LASIK & vision correction','glasses & contact lenses','pediatric ophthalmology','dry-eye treatment'], audience:'patients', roleLine:'eye clinic landing pages', scene:{ subject:'bright optometry reception with professional staff greeting a patient at the front desk', palette:'clean white and sky blue with silver accents', env:'modern eye clinic interior with display frames and natural light' }, seoSeeds:['eye clinic','optometrist','LASIK','contact lenses'], packStrings:PACK_PATIENT },
+  derma: { label:'Dermatology clinic', regex:/(dermatolog|skin care|\u062c\u0644\u062f\u064a)/i, services:['acne & scar treatment','laser hair removal','skin rejuvenation','mole screening','cosmetic dermatology'], audience:'patients', roleLine:'dermatology clinic landing pages', scene:{ subject:'modern dermatology consultation room with a dermatologist reviewing skin imaging', palette:'white and soft peach with warm wood accents', env:'clean, clinical yet inviting treatment room with state-of-the-art laser equipment' }, seoSeeds:['dermatologist','skin clinic','acne treatment','laser hair removal'], packStrings:PACK_PATIENT },
+  physio: { label:'Physiotherapy center', regex:/(physio|physical therapy|\u0639\u0644\u0627\u062c \u0637\u0628\u064a\u0639\u064a|\u062a\u0623\u0647\u064a\u0644)/i, services:['sports injury rehab','manual therapy','posture correction','post-surgery rehabilitation','home exercise programs'], audience:'patients', roleLine:'physiotherapy landing pages', scene:{ subject:'spacious physiotherapy studio with a therapist guiding a patient through recovery exercises', palette:'soft green and warm grey with natural wood tones', env:'bright rehabilitation center with exercise equipment and natural light' }, seoSeeds:['physiotherapy','physical therapy','sports rehab','back pain treatment'], packStrings:PACK_PATIENT },
+  pharmacy: { label:'Pharmacy', regex:/(pharmac|\u0635\u064a\u062f\u0644\u064a)/i, services:['medication supply & refills','free health screenings','vaccination','skin/hygiene products','delivery service'], audience:'patients', roleLine:'pharmacy landing pages', scene:{ subject:'bright modern pharmacy with a pharmacist assisting a customer at the consultation counter', palette:'clean white and fresh green with soft blue accents', env:'well-organized pharmacy interior with lit shelving and a welcoming consultation area' }, seoSeeds:['pharmacy near me','medication delivery','vaccination','pharmacie'], packStrings:PACK_PATIENT },
+  veterinary: { label:'Veterinary clinic', regex:/(veterinar|\bvet\b|\u0628\u064a\u0637\u0631)/i, services:['vaccinations','surgery','grooming','emergency care','dental care for pets'], audience:'patients', roleLine:'veterinary clinic landing pages', scene:{ subject:'friendly veterinary clinic with a vet gently examining a pet on the examination table', palette:'soft teal and warm beige with natural wood tones', env:'bright, caring clinic environment with pet-friendly design elements' }, seoSeeds:['veterinary clinic','vet near me','pet care','puppy vaccination'], packStrings:PACK_PATIENT },
+  restaurant: { label:'Restaurant', regex:/(restaurant|cafe|coffee|pizza|burger|\u0645\u0637\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0627\u0641\u064a\u0647)/i, services:['signature dishes & menu highlights','online reservation','delivery/order online','family & group offers','chef specials'], audience:'customers', roleLine:'restaurant landing pages', scene:{ subject:'inviting restaurant interior with a chef presenting a signature dish at a beautifully set table', palette:'warm amber and deep green with copper accents', env:'stylish dining space with soft pendant lighting, textured walls, and elegant table settings' }, seoSeeds:['restaurant near me','reservation','delivery','café'], packStrings:PACK_PATIENT },
+  legal: { label:'Law office', regex:/(law|attorney|legal|\u0645\u062d\u0627\u0645)/i, services:['free initial consultation','contracts & drafting','court representation','corporate legal advice'], audience:'customers', roleLine:'law firm landing pages', scene:{ subject:'elegant law office with a confident attorney seated at a mahogany desk', palette:'warm walnut wood, leather brown, and cream with brass accents', env:'refined office with floor-to-ceiling bookshelves, legal volumes, and warm ambient lighting' }, seoSeeds:['law firm','lawyer','legal consultation','avocat'], packStrings:PACK_PATIENT },
+  plastic: { label:'Plastic & cosmetic surgery', regex:/(plastic surgeon|cosmetic surgeon|plastic surgery|chirurgie esth\u00e9tique|chirurgien esth\u00e9tique|chirurgie plastique|\u062c\u0631\u0627\u062d\u0629 \u062a\u062c\u0645\u064a\u0644|\u062a\u062c\u0645\u064a\u0644|esth\u00e9ticien)/i, services:['Rhinoplasty','Liposuction & body contouring','Breast augmentation','Botox & fillers','Blepharoplasty','Post-operative care'], audience:'patients', roleLine:'plastic surgery landing pages', scene:{ subject:'a plastic surgeon reviewing a consultation with a patient in a refined consultation lounge', palette:'warm neutral tones with soft beige and sand accents', env:'elegant aesthetic clinic consultation lounge, warm neutral tones, soft golden light, refined minimal decor' }, seoSeeds:['plastic surgeon','cosmetic surgery','rhinoplasty','botox'], packStrings:PACK_PATIENT },
+  realty: { label:'Real estate agency', regex:/(real estate|property|immobili|realtor|agence immob|\u0639\u0642\u0627\u0631)/i, services:['achat / vente','location longue & courte dur\u00e9e','gestion locative','estimation','accompagnement juridique'], audience:'clients', single:'client', roleLine:'real estate landing pages', scene:{ subject:'bright real estate agency office with an agent presenting a property listing to buyers', palette:'warm greys and deep blue with gold accents', env:'modern agency storefront with property photos and neighborhood landmarks visible' }, seoSeeds:['agence immobili\u00e8re','real estate agency','appartement \u00e0 vendre','property near me'], packStrings:PACK_CLIENTS, noise:['agence','immo','immobilier','estate','realty'] },
+  carrental: { label:'Car rental agency', regex:/(car rental|car hire|rent a car|location de voiture|location de voitures|location voiture|voiture de location|locauto|\u062a\u0623\u062c\u064a\u0631 \u0633\u064a\u0627\u0631\u0627\u062a)/i, services:['citadines','SUV & famille','luxe','longue dur\u00e9e','avec chauffeur','livraison a\u00e9roport 24/7'], audience:'customers', single:'customer', roleLine:'car rental landing pages', scene:{ subject:'lineup of clean rental cars in front of a modern rental office, an employee handing keys to a smiling customer', palette:'fresh blues and clean whites with orange accents', env:'bright rental lot with a reception counter and airport shuttle visible' }, seoSeeds:['location voiture','car rental','rent a car Marrakech','location voiture Marrakech'], packStrings:PACK_CUSTOMERS, noise:['car','auto','rental','location','voiture'] },
+  travel: { label:'Travel & tourism agency', regex:/(travel agency|travel agent|tour operator|voyage|tourisme|tourism|safari|circuit organis|omra|hajj|\u0633\u064a\u0627\u062d\u0629|\u0633\u0641\u0631|\u0623\u0633\u0641\u0627\u0631)/i, services:['packages Omra & Hajj','circuits organis\u00e9s','assistance visa','billets & h\u00f4tels','voyages groupes'], audience:'travelers', single:'traveler', roleLine:'travel & tourism landing pages', scene:{ subject:'travel agency desk with globes, brochures and a booking screen showing a sunny destination', palette:'deep teal and warm sand with coral accents', env:'bright agency office decorated with destination landscapes and luggage accents' }, seoSeeds:['agence de voyage','travel agency','Omra & Hajj','circuit organis\u00e9'], packStrings:PACK_TRAVELERS, noise:['travel','voyage','tours','agence'] },
+  medical: { label:'Medical clinic', regex:/(clinic|medical|doctor|hospital|\u0639\u064a\u0627\u062f|\u0637\u0628\u064a\u0628|\u0645\u0633\u062a\u0634\u0641\u0649|\u0645\u0631\u0643\u0632 \u0637\u0628)/i, services:['specialist consultations','lab tests & diagnostics','chronic disease follow-up','online appointment booking'], audience:'patients', roleLine:'medical landing pages', scene:{ subject:'professional medical clinic reception with a welcoming healthcare team', palette:'clean white and calm blue with silver accents', env:'modern medical facility with a bright reception area and subtle greenery' }, seoSeeds:['medical clinic','doctor near me','specialist consultation','medical checkup'], packStrings:PACK_PATIENT }
+};
+
+const PROF_CATS = Object.entries(VERTICALS).map(([id,v]) => [id, v.regex, v.label]);
+const CAT_LABEL = Object.fromEntries(PROF_CATS.map(([id,,label]) => [id,label]));
+const CAT_ICONS = { realty:'🏠', carrental:'🚗', travel:'✈️' };
+const SERVICES_HINT = Object.fromEntries(Object.entries(VERTICALS).map(([id,v]) => [id, v.services.join(', ')]));
 
 function detectProfessionId(text){
   if(!text) return null;
@@ -1275,9 +1302,12 @@ function buildFallbackUSP(c){
   const rating = c.rating || '5.0';
   const reviews = c.reviews || '0';
   const prim = String((options && options.lang) || 'en').split('_')[0];
-  if (prim === 'fr') return `${prof} à ${city}, notée ${rating}⭐ par ${reviews} patientes`;
-  if (prim === 'ar') return `${prof} في ${city} بتقييم ${rating}⭐ من ${reviews} مريضًا`;
-  return `${prof} in ${city}, rated ${rating}⭐ by ${reviews} patients`;
+  const catId = detectProfessionId((prof || '') + ' ' + (c.name || ''));
+  const ptpl = (VERTICALS[catId] && VERTICALS[catId].packStrings) || PACK_PATIENT;
+  const noun = (ptpl[prim] || ptpl.en).noun || 'patients';
+  if (prim === 'fr') return `${prof} à ${city}, notée ${rating}⭐ par ${reviews} ${noun}`;
+  if (prim === 'ar') return `${prof} في ${city} بتقييم ${rating}⭐ من ${reviews} ${noun}`;
+  return `${prof} in ${city}, rated ${rating}⭐ by ${reviews} ${noun}`;
 }
 
 async function generateUSP(timeoutMs, retry=false){
@@ -1353,8 +1383,9 @@ async function generatePatientInsights(timeoutMs){
     logLine('💬 Generating patient insights...', 'info');
     const catId = detectProfessionId((client.prof || '') + ' ' + (client.name || ''));
     const services = SERVICES_HINT[catId] || '';
-    const audience = (catId === 'restaurant' || catId === 'legal') ? 'customers' : 'patients';
-    const owner = audience === 'patients' ? 'patient' : 'customer';
+    const audience = VERTICALS[catId] ? VERTICALS[catId].audience : 'patients';
+    const vert = VERTICALS[catId] || null;
+    const owner = (vert && vert.single) ? vert.single : 'patient';
     const prompt = `You are a ${owner} sentiment analyst. For a ${client.prof || 'business'} in ${client.city || 'an unknown city'} with ${client.rating || '—'} stars from ${client.reviews || '—'} reviews, generate realistic insights about ${audience}.
 ${catId ? 'Business category: ' + CAT_LABEL[catId] : ''}${services ? '\nTypical services: ' + services : ''}
 Return ONLY valid JSON (no markdown, no explanation):
@@ -1548,6 +1579,8 @@ function buildOutreach(c, opts){
     const mainOpp = (gap && gap.opportunities && gap.opportunities[0]) || 'convert local search traffic into bookings';
     const ratingLine = c.rating ? c.rating + '\u2b50 (' + (c.reviews || '?') + ' reviews)' : '';
     const mapsLink = c.rawUrl || '';
+    const catId = detectProfessionId((c.prof || '') + ' ' + (c.name || ''));
+    const aud = (VERTICALS[catId] && VERTICALS[catId].audience) || 'patients';
 
     const templates = {
       en: {
@@ -1562,7 +1595,7 @@ function buildOutreach(c, opts){
         posGap: '\u26a0 ' + mainGap,
         posOpp: '\ud83c\udfaf ' + mainOpp,
         uspLine: function(u){ return '\u2713 Your edge: ' + u; },
-        insightLine: function(s){ return '\ud83d\udcac What patients say: ' + s; },
+        insightLine: function(s){ return '\ud83d\udcac What ' + aud + ' say: ' + s; },
         cta: '\n\nI\'ve prepared a free landing page design proposal that turns your strengths into a visible competitive advantage online. Would you like me to send the preview? \ud83d\ude4f'
       },
       ar: {
@@ -1629,19 +1662,7 @@ function buildImagePrompts(c, opts){
   const tone = opts.tone || 'trust';
   const variant = opts.variant || 'conservative';
 
-  const scenes = {
-    dental: { subject: 'modern dental operatory with a smiling dentist gently guiding a patient into a dental chair', palette: 'white and sage green with subtle teal accents', env: 'bright, organized clinic interior with modern equipment' },
-    beauty: { subject: 'luxe beauty treatment room with an aesthetician preparing a facial station', palette: 'soft blush pink and warm gold with ivory tones', env: 'elegant salon interior with ambient lighting, marble surfaces, and fresh flowers' },
-    eye: { subject: 'bright optometry reception with professional staff greeting a patient at the front desk', palette: 'clean white and sky blue with silver accents', env: 'modern eye clinic interior with display frames and natural light' },
-    derma: { subject: 'modern dermatology consultation room with a dermatologist reviewing skin imaging', palette: 'white and soft peach with warm wood accents', env: 'clean, clinical yet inviting treatment room with state-of-the-art laser equipment' },
-    physio: { subject: 'spacious physiotherapy studio with a therapist guiding a patient through recovery exercises', palette: 'soft green and warm grey with natural wood tones', env: 'bright rehabilitation center with exercise equipment and natural light' },
-    legal: { subject: 'elegant law office with a confident attorney seated at a mahogany desk', palette: 'warm walnut wood, leather brown, and cream with brass accents', env: 'refined office with floor-to-ceiling bookshelves, legal volumes, and warm ambient lighting' },
-    medical: { subject: 'professional medical clinic reception with a welcoming healthcare team', palette: 'clean white and calm blue with silver accents', env: 'modern medical facility with a bright reception area and subtle greenery' },
-    plastic: { subject: 'a plastic surgeon reviewing a consultation with a patient in a refined consultation lounge', palette: 'warm neutral tones with soft beige and sand accents', env: 'elegant aesthetic clinic consultation lounge, warm neutral tones, soft golden light, refined minimal decor' },
-    restaurant: { subject: 'inviting restaurant interior with a chef presenting a signature dish at a beautifully set table', palette: 'warm amber and deep green with copper accents', env: 'stylish dining space with soft pendant lighting, textured walls, and elegant table settings' },
-    pharmacy: { subject: 'bright modern pharmacy with a pharmacist assisting a customer at the consultation counter', palette: 'clean white and fresh green with soft blue accents', env: 'well-organized pharmacy interior with lit shelving and a welcoming consultation area' },
-    veterinary: { subject: 'friendly veterinary clinic with a vet gently examining a pet on the examination table', palette: 'soft teal and warm beige with natural wood tones', env: 'bright, caring clinic environment with pet-friendly design elements' }
-  };
+;
 
   const tones = {
     trust: { lighting: 'soft natural light streaming through large windows', style: 'clean, calm, clinical, soft natural light' },
@@ -1656,7 +1677,8 @@ function buildImagePrompts(c, opts){
     conservative: ''
   };
 
-  const s = scenes[catId] || scenes.medical;
+  const sv = VERTICALS[catId] && VERTICALS[catId].scene;
+  const s = sv || VERTICALS.medical.scene;
   const t = tones[tone] || tones.trust;
   const vExtra = variantExtras[variant] || '';
 
@@ -1669,9 +1691,9 @@ function buildImagePrompts(c, opts){
       body: 'A wide cinematic shot of ' + s.subject + '. The ' + s.env + '. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic, shot on Sony A7IV, 35mm lens, shallow depth of field'
     },
     {
-      usage: 'DOCTOR / TEAM PORTRAIT (4:5) — Use in the About section',
+      usage: 'TEAM PORTRAIT (4:5) — Use in the About section',
       ratio: '4:5',
-      body: 'Professional portrait of the lead practitioner at ' + name + ', standing confidently in the clinic with arms crossed and a warm smile. ' + s.env + '. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic, shot on 85mm portrait lens, soft bokeh background'
+      body: 'Professional portrait of the team at ' + name + ', standing confidently with warm smiles and a welcoming presence. ' + s.env + '. ' + t.lighting + '. Color palette: ' + s.palette + '. ' + t.style + vExtra + '. Photorealistic, shot on 85mm portrait lens, soft bokeh background'
     },
     {
       usage: 'INTERIOR / RECEPTION (16:9) — Use in the trust or gallery section',
@@ -1686,7 +1708,7 @@ function buildImagePrompts(c, opts){
     {
       usage: 'LOGO DIRECTION — Descriptive prompt for AI logo generators',
       ratio: '1:1',
-      body: 'Minimalist logo concept for ' + name + ', a ' + prof + ' in ' + city + '. Clean geometric icon combining a medical/professional symbol with the business initials. Color palette: ' + s.palette + '. Flat design, vector style, no gradients, white background, scalable for business cards and signage'
+      body: 'Minimalist logo concept for ' + name + ', a ' + prof + ' in ' + city + '. Clean geometric icon combining a modern professional symbol with the business initials. Color palette: ' + s.palette + '. Flat design, vector style, no gradients, white background, scalable for business cards and signage'
     }
   ];
 
@@ -1897,6 +1919,13 @@ function switchMode(mode){
   $('#modeProspectBtn').classList.toggle('active', !isExtract);
   logLine('Mode: ' + mode);
 }
+function quickPick(q){
+  const inp = $('#p_prof');
+  if(!inp) return;
+  inp.value = q;
+  inp.focus();
+  logLine('🎯 Quick pick: ' + q, 'info');
+}
 const analyze=lockGate(_analyzeOrig);
 const CITY_TOKENS = new Set(['riyadh','jeddah','dammam','dhahran','khobar','mecca','makkah','medina','madina','jubail','yanbu','tabuk','abha','hofuf','hail','arar','buraidah','qassim','taif','khamis','najran','jizan','dubai','abu dhabi','sharjah','ajman','ras al khaimah','fujairah','al ain','doha','manama','muharraq','kuwait','salmiya','hawally','muscat','salalah','cairo','giza','alexandria','casablanca','rabat','marrakech','tangier','tunis']);
 function prospectBaseName(name, cityHint){
@@ -1908,7 +1937,6 @@ function prospectBaseName(name, cityHint){
   if(toks.length >= 2 && (CITY_TOKENS.has(last) || last === h || last === 'branch' || last === 'mall')) toks.pop();
   return toks.join(' ');
 }
-
 async function _prospectSearchOrig(){
   const prof = ($('#p_prof')?.value||'').trim();
   const city = ($('#p_city')?.value||'').trim();
@@ -2013,6 +2041,8 @@ function renderProspectResults(places){
     info += '</div>';
 
     let badges = '<div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0">';
+    const leafCat = detectProfessionId(((p.type||p.category)||'') + ' ' + (p.title||p.name||''));
+    if(leafCat) badges += '<span style="font-size:10px; padding:2px 6px; border-radius:3px; background:#1a2818; color:var(--ok)">' + (CAT_ICONS[leafCat] ? CAT_ICONS[leafCat] + ' ' : '') + CAT_LABEL[leafCat] + '</span>';
     badges += hasWeb
       ? '<span style="font-size:11px; padding:3px 8px; border-radius:4px; background:#1a2818; color:var(--muted)">HAS WEBSITE</span>'
       : '<span style="font-size:11px; padding:3px 8px; border-radius:4px; background:#2d3a20; color:var(--ok)">🎯 NO WEBSITE</span>';
@@ -2116,7 +2146,7 @@ function useProspect(btn){
 }
 
 const VARIANT_DIRECTIVES = {
-  conservative: 'DESIGN VARIANT: Conservative — prioritize trust, high credibility, and institutional reliability. Use a classic, clean layout with ample whitespace. Favor subtle color gradients, professional photography style, traditional navigation patterns. Copywriting should be measured, authoritative, and fact-based. Emphasize certifications, years of experience, patient testimonials, and clinical precision. Avoid flashy animations or aggressive CTAs.',
+  conservative: 'DESIGN VARIANT: Conservative — prioritize trust, high credibility, and institutional reliability. Use a classic, clean layout with ample whitespace. Favor subtle color gradients, professional photography style, traditional navigation patterns. Copywriting should be measured, authoritative, and fact-based. Emphasize certifications, years of experience, client testimonials, and proven results. Avoid flashy animations or aggressive CTAs.',
   bold: 'DESIGN VARIANT: Bold — maximize conversion with punchy hooks and high-contrast visual cues. Use large hero sections, vibrant accent colors, dynamic hover effects, and urgency-driven layout. Copywriting should be direct, action-oriented, and benefit-focused. Lead with results, use strong verbs, create FOMO with limited-time offers. CTA buttons should be prominent and repeated strategically.',
   premium: 'DESIGN VARIANT: Premium — luxury boutique feel with minimalist elegance and exclusivity. Use restrained color palette (black/white/gold accents), generous whitespace, elegant serif or thin sans-serif typography. Copywriting should be refined, understated, and aspirational. Emphasize bespoke experience, privacy, white-glove service. Layout should feel curated, not crowded — every element earns its space.'
 };
@@ -2137,7 +2167,7 @@ CTA principal: réservation WhatsApp en 1 clic.
 Donne-moi un design efficace et crédible — pas besoin de fioritures,
 juste une page qui fonctionne parfaitement et inspire confiance.
 
-ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
+ART-DIRECTION: light background only (white / pale institutional blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
     },
     bold: {
       title: "Landing page moderne et professionnelle",
@@ -2156,17 +2186,16 @@ créative sur la palette, la typo et la mise en page.`
     premium: {
       title: "Landing page premium et immersive",
       brief: `Crée une landing page d'exception pour [NOM], [PROFESSION]
-à [VILLE] — niveau flagship clinic.
+à [VILLE] — niveau flagship premium.
 
 Priorité: storytelling visuel, détails raffinés, expérience immersive.
 Ton: exclusif, éditorial, luxe discret (pas criard).
-Structure: Hero cinématique + parcours patient + services signature +
+Structure: Hero cinématique + parcours client + services signature +
 galerie + témoignages + FAQ premium + carte + CTA VIP.
 CTA principal: réservation WhatsApp en 1 clic.
 
 Liberté totale: palette sophistiquée, typographie éditoriale, animations
-subtiles, micro-interactions. Je veux un résultat digne d'une clinique
-parisienne haut de gamme.
+subtiles, micro-interactions. Je veux un résultat digne d'une enseigne premium parisienne.
 
 ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.`
     }
@@ -2184,7 +2213,7 @@ Main CTA: one-click WhatsApp booking.
 Give me an effective, credible design — no frills needed, just a page
 that works perfectly and inspires trust.
 
-ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
+ART-DIRECTION: light background only (white / pale institutional blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
     },
     bold: {
       title: "Modern and professional landing page",
@@ -2202,17 +2231,17 @@ freedom on palette, typography, and layout.`
     premium: {
       title: "Premium and immersive landing page",
       brief: `Create an exceptional landing page for [NAME], a [PROFESSION]
-in [CITY] — flagship clinic level.
+in [CITY] — flagship business level.
 
 Priority: visual storytelling, refined details, immersive experience.
 Tone: exclusive, editorial, discreet luxury (not flashy).
-Structure: cinematic hero + patient journey + signature services +
+Structure: cinematic hero + customer journey + signature services +
 gallery + testimonials + premium FAQ + map + VIP CTA.
 Main CTA: one-click WhatsApp booking.
 
 Total freedom: sophisticated palette, editorial typography, subtle
 animations, micro-interactions. I want a result worthy of a
-high-end flagship clinic.
+high-end flagship business.
 
 ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.`
     }
@@ -2230,7 +2259,7 @@ ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single
 أعطني تصميمًا فعالًا وموثوقًا — لا حاجة للزوائد، فقط صفحة تعمل
 بشكل مثالي وتُلهم الثقة.
 
-ART-DIRECTION: light background only (white / pale medical blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
+ART-DIRECTION: light background only (white / pale institutional blue), no dark backgrounds, minimal graphics and animations, simple sans-serif.`
     },
     bold: {
       title: "صفحة هبوط حديثة واحترافية",
@@ -2248,16 +2277,16 @@ ART-DIRECTION: light background only (white / pale medical blue), no dark backgr
     premium: {
       title: "صفحة هبوط فاخرة وغامرة",
       brief: `أنشئ صفحة هبوط استثنائية لـ [الاسم]، [المهنة] في [المدينة]
-— بمستوى عيادات النخبة.
+— بمستوى راقٍ.
 
 الأولوية: سرد بصري، تفاصيل راقية، تجربة غامرة.
 النبرة: حصرية، تحريرية، فخامة هادئة (ليست صاخبة).
-البنية: قسم رئيسي سينمائي + رحلة المريض + خدمات مميزة + معرض +
+البنية: قسم رئيسي سينمائي + رحلة العميل + خدمات مميزة + معرض +
 آراء + أسئلة شائعة راقية + خريطة + زر VIP.
 الزر الرئيسي: حجز واتساب بنقرة واحدة.
 
 حرية تامة: لوحة ألوان راقية، خطوط تحريرية، حركات دقيقة،
-تفاعلات دقيقة. أريد نتيجة تليق بعيادة فاخرة.
+تفاعلات دقيقة. أريد نتيجة تليق بعلامة فاخرة.
 
 ART-DIRECTION: rich deep palette mandatory (black or emerald + gold), one single consistent CTA color everywhere, crafted hero visual (never raw stock photo), high-contrast typography. "Discreet luxury" means sober richness, not paleness.`
     }
@@ -2291,17 +2320,21 @@ function collect(){
   options={lang:$('#o_lang').value, cta:$('#o_cta').value, tone:$('#o_tone').value, variant:options.variant||'conservative', outreachLang:$('#o_outreachLang')?.value||'en'};
 }
 function buildPrompts(){
+  const catId = detectProfessionId((client.prof||'') + ' ' + (client.name||''));
+  const vert = VERTICALS[catId] || null;
+  const wsNoun = (vert && vert.single) || 'patient';
+  const audLabel = (vert && vert.audience) || 'patients';
   const LANG_FULL = {
     ar:'Arabic — full RTL layout, dir="rtl", use Tajawal font',
     en:'English — LTR layout, use Inter font',
     fr:'French — LTR layout, use Inter font',
-    fr_ar:'Bilingual (French + Arabic) — build a page with a prominent French section (LTR, Inter font) AND an Arabic section (dir=rtl, Tajawal font). Include a visible language switcher (FR/AR). Each section must contain the full content: hero, services, about, reviews, FAQ, location, footer. Both languages must carry the same clinic name and data. Do NOT simply append a translation — design each language block as a complete, styled section.',
-    fr_ar_en:'Trilingual (French + Arabic + English) — build a page with three language blocks: French (LTR, Inter font), Arabic (dir=rtl, Tajawal font), and English (LTR, Inter font). Include a language switcher (FR/AR/EN). Each block must contain the full content: hero, services, about, reviews, FAQ, location, footer. All three languages must carry the same clinic name and data. Do NOT just append translations — design each language block as a complete, styled section.'
+    fr_ar:'Bilingual (French + Arabic) — build a page with a prominent French section (LTR, Inter font) AND an Arabic section (dir=rtl, Tajawal font). Include a visible language switcher (FR/AR). Each section must contain the full content: hero, services, about, reviews, FAQ, location, footer. Both languages must carry the same business name and data. Do NOT simply append a translation — design each language block as a complete, styled section.',
+    fr_ar_en:'Trilingual (French + Arabic + English) — build a page with three language blocks: French (LTR, Inter font), Arabic (dir=rtl, Tajawal font), and English (LTR, Inter font). Include a language switcher (FR/AR/EN). Each block must contain the full content: hero, services, about, reviews, FAQ, location, footer. All three languages must carry the same business name and data. Do NOT just append translations — design each language block as a complete, styled section.'
   }[options.lang];
   const _langTokens = String(options.lang||'en').split('_').filter(Boolean);
   const BUILD_ORDER = _langTokens.length > 1 ? ("\nBUILD ORDER: 1) complete the FULL deep page in the primary language (" + _langTokens[0] + "); 2) THEN add the other languages (" + _langTokens.slice(1).join(' + ') + ") with a switcher. One deep page first, never three shallow blocks.") : "";
   const CTA = {
-    whatsapp:`WhatsApp booking — real number: ${client.phone||'[PASTE NUMBER]'}. CRITICAL JS REQUIREMENT: Include a complete, functional <script> tag before </body> that (1) selects the booking form by id or tag, (2) intercepts its submit event with e.preventDefault(), (3) extracts the name, phone, and service fields from the form, (4) builds the message body including the service name and patient name, and (5) opens https://wa.me/${client.phone.replace(/[^0-9]/g,'')||'[PASTE_NUMBER]'}?text={encoded_message} in a new tab via window.open(). Use encodeURIComponent for the text parameter. The script must be fully working production code — NO mock alerts, NO placeholder callbacks, NO console.log stubs. If the form has no id, add one (e.g. id="bookingForm").`,
+    whatsapp:`WhatsApp booking — real number: ${client.phone||'[PASTE NUMBER]'}. CRITICAL JS REQUIREMENT: Include a complete, functional <script> tag before </body> that (1) selects the booking form by id or tag, (2) intercepts its submit event with e.preventDefault(), (3) extracts the name, phone, and service fields from the form, (4) builds the message body including the service name and ${wsNoun} name, and (5) opens https://wa.me/${client.phone.replace(/[^0-9]/g,'')||'[PASTE_NUMBER]'}?text={encoded_message} in a new tab via window.open(). Use encodeURIComponent for the text parameter. The script must be fully working production code — NO mock alerts, NO placeholder callbacks, NO console.log stubs. If the form has no id, add one (e.g. id="bookingForm").`,
     call:'Direct phone call with click-to-call',
     booking:'In-page appointment form',
     visit:'Embedded Google Map for directions'
@@ -2310,7 +2343,7 @@ function buildPrompts(){
     trust:'trusted, calm, clinical', luxury:'luxury, premium',
     friendly:'friendly, warm', modern:'modern, tech-forward'
   }[options.tone];
-  const servicesHint = SERVICES_HINT[detectProfessionId((client.prof||'')+' '+(client.name||''))] || 'top 4-6 core services with short benefit-driven blurbs';
+  const servicesHint = SERVICES_HINT[catId] || 'top 4-6 core services with short benefit-driven blurbs';
   const WEB = client.website==='no'
     ? 'Client has NO website — this will be their first digital presence.'
     : `Client has a website (${client.website_url}) — build a conversion-focused landing page.`;
@@ -2326,7 +2359,7 @@ function buildPrompts(){
       (client.insights.concerns || []).length ? '- Address in FAQ: ' + client.insights.concerns.join('; ') : '',
       (client.insights.keywords || []).length ? '- SEO keywords: ' + client.insights.keywords.join(', ') : ''
     ].filter(Boolean);
-    if (lines.length) INSIGHTS = 'PATIENT INSIGHTS TO USE:\n' + lines.join('\n');
+    if (lines.length) INSIGHTS = audLabel.toUpperCase() + ' INSIGHTS TO USE:\n' + lines.join('\n');
   }
   let COMPETITIVE = '';
   if (client.competitors && client.competitors.length) {
@@ -2359,7 +2392,7 @@ ${_brief.brief
   .replace(/\[PROFESSION\]|\[المهنة\]/g, client.prof||'[PROFESSION]')
   .replace(/\[VILLE\]|\[CITY\]|\[المدينة\]/g, client.city||'[CITY]')}`;
 
-  const landing=`You are a senior web designer specializing in medical landing pages. Build a complete page:
+  const landing=`You are a senior web designer specializing in ${vert && vert.roleLine ? vert.roleLine : 'medical landing pages'}. Build a complete page:
 
 CLIENT DATA:
 - Name: ${client.name}
@@ -2394,9 +2427,9 @@ MANDATORY PAGE FEATURES (apply to every version):
 TECHNICAL: Mobile-first, fast, local SEO for "${client.prof} ${client.city}", WCAG contrast. Services to feature (suggest): ${servicesHint}. Embed a LIVE Google Map using the embed src above (keyless iframe), with a prominent 'Get Directions' button linking to the directions link — do NOT use a placeholder map.
 OUTPUT: single self-contained HTML/CSS/JS file.${BUILD_ORDER}`;
 
-  const identity=`You are a senior brand designer for medical businesses. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}
+  const identity=`You are a senior brand designer specializing in ${vert ? vert.label + ' branding' : 'local business branding'}. Create a visual identity for "${client.name}" (${client.prof}) in ${client.city}. Tone: ${TONE}.${VARIANT_DIRECTIVES[options.variant||'conservative'] ? '\n' + VARIANT_DIRECTIVES[options.variant||'conservative'] : ''}${USP ? '\n' + USP : ''}
 
-DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, patient folder, social post), usage guidelines.`;
+DELIVERABLES: 3 logo concepts, color palette (4-5 HEX codes with rationale), typography (Arabic + Latin Google Fonts), applications (business card, signage, ${wsNoun} folder, social post), usage guidelines.`;
 
   const outreach = buildOutreach(client, options);
   const images = buildImagePrompts(client, options);
@@ -2434,9 +2467,70 @@ function showTab(key, el){
   setEditMode(false);
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
-  $('#promptOut').textContent=lastPrompts[key]||'';
-  $('#aiBtn').style.display = key==='outreach' ? 'none' : '';
-  $('#waBtn').className = (key==='outreach' && client.phone) ? 'btn ghost' : 'btn ghost hidden';
+
+  const isPromptTab = ['landing', 'identity', 'outreach', 'images'].includes(key);
+  $('#promptOut').classList.toggle('hidden', !isPromptTab);
+  $('#editBtn').style.display = isPromptTab ? '' : 'none';
+  const promptRow = document.querySelectorAll('#s3 .row')[1];
+  if(promptRow) promptRow.style.display = isPromptTab ? '' : 'none';
+
+  $('#clientDataTab').classList.toggle('hidden', key !== 'clientdata');
+  $('#analysisTab').classList.toggle('hidden', key !== 'analysis');
+
+  if(isPromptTab){
+    $('#promptOut').textContent=lastPrompts[key]||'';
+    $('#aiBtn').style.display = key==='outreach' ? 'none' : '';
+    $('#waBtn').className = (key==='outreach' && client.phone) ? 'btn ghost' : 'btn ghost hidden';
+  } else if(key === 'clientdata'){
+    renderClientDataTab();
+  } else if(key === 'analysis'){
+    renderAnalysisTab();
+  }
+}
+
+function renderClientDataTab(){
+  const box = $('#clientDataTab');
+  const fields = [
+    ['Name', client.name], ['Profession', client.prof], ['City', client.city],
+    ['Phone', client.phone], ['Address', client.address],
+    ['Rating', client.rating + (client.reviews ? ' (' + client.reviews + ' reviews)' : '')],
+    ['Website', client.website_url], ['Hours', client.hours], ['Notes', client.notes]
+  ].filter(f => f[1]);
+  box.innerHTML = `
+    <div style="padding:16px; background:#111; border:1px solid var(--border); border-radius:6px">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+        <b style="color:var(--info)">📋 Stored Client Information</b>
+        <button class="btn ghost small" onclick="copyClientData()">⧉ Copy</button>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px">
+        ${fields.map(([k,v]) => '<div><label style="display:block; font-size:11px; color:var(--muted); margin-bottom:2px">'+k+'</label><div style="font-size:13px">'+v+'</div></div>').join('')}
+      </div>
+    </div>`;
+}
+
+function renderAnalysisTab(){
+  const box = $('#analysisTab');
+  box.innerHTML = '';
+  // Clone existing cards to reuse their internal logic and styling
+  const cards = ['uspCard', 'insightsCard', 'competitorsCard', 'gapAnalysisCard'];
+  cards.forEach(id => {
+    const orig = document.getElementById(id);
+    if(orig && !orig.classList.contains('hidden')){
+      const clone = orig.cloneNode(true);
+      clone.id = id + '_tab';
+      box.appendChild(clone);
+    }
+  });
+  if(!box.innerHTML) box.innerHTML = '<p class="sub" style="padding:20px; text-align:center">No analysis data generated yet.</p>';
+}
+
+function copyClientData(){
+  const text = [
+    'CLIENT DATA',
+    'Name: ' + client.name, 'Profession: ' + client.prof, 'City: ' + client.city,
+    'Phone: ' + client.phone, 'Address: ' + client.address, 'Website: ' + (client.website_url || 'none')
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(()=>toast('⧉ Client data copied'));
 }
 function copyCurrent(){
   navigator.clipboard.writeText(lastPrompts[currentTab]||'').then(()=>toast('⧉ Copied'));
@@ -2535,6 +2629,7 @@ function saveOrUpdate(){
   try { localStorage.setItem(LS_H, JSON.stringify(h)); }
   catch(e){ toast('Storage full — export your data and clean History'); }
   if(localStorage.getItem('op_auto_leads')==='true') addLeadFromClient(client);
+  toast('Saved ✓');
   notifyChange();
 }
 function renderHistory(){
@@ -2609,8 +2704,7 @@ function saveAnalysisOnly(){
   lastPrompts = {};
   saveOrUpdate();
   sessionSaved = true; updateSaveBtn();
-  toast('💾 Analysis saved');
-  go(4);
+  toast('💾 Saved ✓ Analysis');
 }
 
 /* ── Section Edit / Copy helpers ── */
@@ -3101,6 +3195,7 @@ function buildPackIndex(client, options){
   const ctaHref = o.cta==='whatsapp' ? waLink : (o.cta==='call' ? ('tel:'+phone) : (o.cta==='visit' ? map.dirsLink : '#booking'));
   const usp = c.selectedUSP || ('Trusted ' + prof + (city ? ' in ' + city : ''));
   const catId = detectProfessionId((prof||'')+' '+(name||''));
+  const pk = (VERTICALS[catId] && VERTICALS[catId].packStrings) || PACK_PATIENT;
   let services;
   const sloc = SERVICES_LOC[catId];
   if (sloc && sloc[prim]) {
@@ -3124,7 +3219,7 @@ function buildPackIndex(client, options){
   const faqItems = hasConcerns ? concerns.slice(0,4).map((co,i)=>'<details style="background:'+tone.card+';border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px"><summary style="cursor:pointer;font-weight:600;color:'+tone.heading+'">'+n('Q'+(i+1))+'. '+n(S.faqQ)+'</summary><p style="color:'+tone.text+';margin:10px 0 0">'+n(co)+'.</p></details>').join('\n        ') : '';
 
   const reviewsSection = hasStrengths
-    ? '<section id="reviews" class="reviews">\n  <div class="container">\n    <h2>'+n(S.reviewsTitle)+'</h2>\n    <div class="grid">\n        '+reviewCards+'\n    </div>\n  </div>\n</section>'
+    ? '<section id="reviews" class="reviews">\n  <div class="container">\n    <h2>'+n((pk[prim] || pk.en).reviewsTitle)+'</h2>\n    <div class="grid">\n        '+reviewCards+'\n    </div>\n  </div>\n</section>'
     : '';
   const faqSection = hasConcerns
     ? '<section id="faq" class="faq">\n  <div class="container">\n    <h2>'+n(S.faqTitle)+'</h2>\n    <div>\n        '+faqItems+'\n    </div>\n  </div>\n</section>'
@@ -3473,14 +3568,16 @@ function handleDeckShot(which, input) {
 
 function slugify(s) { return String(s||'client').replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 40); }
 
-function monogram(name) {
+function monogram(name, catId) {
   const skip = /^(dr|dra|pr|me|centre|center|cabinet|clinic|poly|polyclinique)$/i;
-  const parts = String(name||'').split(/\s+/).filter(w => !skip.test(w) && w.length > 1);
+  const noise = (catId && VERTICALS[catId] && VERTICALS[catId].noise) || [];
+  const noiseRe = noise.length ? new RegExp('^(' + noise.join('|') + ')$', 'i') : null;
+  const parts = String(name||'').split(/\s+/).filter(w => !skip.test(w) && !(noiseRe && noiseRe.test(w)) && w.length > 1);
   return (parts[0]||'')[0] + (parts[1]||parts[0]||'')[0] || 'CL';
 }
 
-const PROF_FR = {dental:'Clinique dentaire',beauty:'Salon de beauté',eye:'Centre ophtalmologique',derma:'Centre dermatologique',physio:'Centre de physiothérapie',pharmacy:'Pharmacie',veterinary:'Clinique vétérinaire',restaurant:'Restaurant',legal:'Cabinet d\'avocat',plastic:'Chirurgie esthétique',medical:'Clinique médicale'};
-const PROF_AR = {dental:'عيادة أسنان',beauty:'صالون تجميل',eye:'عيادة عيون',derma:'عيادة جلدية',physya:'مركز علاج طبيعي',pharmacy:'صيدلية',veterinary:'عيادة بيطري',restaurant:'مطعم',legal:'مكتب محاماة',plastic:'جراحة تجميلية',medical:'عيادة طبية'};
+const PROF_FR = {dental:'Clinique dentaire',beauty:'Salon de beauté',eye:'Centre ophtalmologique',derma:'Centre dermatologique',physio:'Centre de physiothérapie',pharmacy:'Pharmacie',veterinary:'Clinique vétérinaire',restaurant:'Restaurant',legal:'Cabinet d\'avocat',plastic:'Chirurgie esthétique',realty:'Agence immobilière',carrental:'Location de voitures',travel:'Agence de voyage',medical:'Clinique médicale'};
+const PROF_AR = {dental:'عيادة أسنان',beauty:'صالون تجميل',eye:'عيادة عيون',derma:'عيادة جلدية',physio:'مركز علاج طبيعي',pharmacy:'صيدلية',veterinary:'عيادة بيطري',restaurant:'مطعم',legal:'مكتب محاماة',plastic:'جراحة تجميلية',realty:'وكالة عقارات',carrental:'وكالة كراء السيارات',travel:'وكالة أسفار',medical:'عيادة طبية'};
 
 function buildDeck(client, options) {
   const c = client || {}, o = options || {};
@@ -3492,8 +3589,8 @@ function buildDeck(client, options) {
   const phoneDigits = String(c.phone||'').replace(/\D/g,'');
   const waLink = phoneDigits ? 'https://wa.me/'+phoneDigits : '#';
   const lang = String(o.outreachLang || 'fr');
-  const mono = monogram(name);
   const catId = detectProfessionId((prof || '') + ' ' + (name || ''));
+  const mono = monogram(name, catId);
   const profLabel = lang === 'ar' ? (PROF_AR[catId] || prof) : lang === 'fr' ? (PROF_FR[catId] || prof) : (CAT_LABEL[catId] || prof);
   const W = {
     fr: {
@@ -3608,6 +3705,13 @@ function buildDeck(client, options) {
       compThBusiness: 'المهنة'
     }
   }[lang] || W.fr;
+  const pk = (VERTICALS[catId] && VERTICALS[catId].packStrings) || PACK_PATIENT;
+  W.fr.assetLine = (pk.fr || pk.en).assetLine;
+  W.en.assetLine = (pk.en || pk.fr).assetLine;
+  W.ar.assetLine = (pk.ar || pk.en).assetLine;
+  W.fr.gapConsequence = (pk.fr || pk.en).gapConsequence;
+  W.en.gapConsequence = (pk.en || pk.fr).gapConsequence;
+  W.ar.gapConsequence = (pk.ar || pk.en).gapConsequence;
 
   const comps = c.competitors || [];
   const hasComps = comps.length > 0;
