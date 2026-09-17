@@ -525,6 +525,13 @@ pre.prompt[contenteditable="true"]{outline:none}
   Sync: OFF</div>
 
 
+<label class="toggle" style="margin-top:14px">
+  <input type="checkbox" id="set_cloudSync" checked>
+  <span class="slider"></span>
+  <span>☁️ Cloud sync to LeadGen-Hub</span>
+</label>
+<p class="sub" style="font-size:11px;margin-top:6px">Sync leads to LeadGen-Hub Supabase (fire-and-forget, default ON).</p>
+
 <h2 style="color:var(--muted); margin-top:22px">🔧 Extraction Options</h2>
     <label class="toggle">
       <input type="checkbox" id="set_jina" checked>
@@ -607,6 +614,8 @@ const STEPS=['URL','Data','Options','Results','History'];
 const GEMINI_MODELS=['gemini-3.6-flash','gemini-flash-latest'];
 const PROXY_DEFAULT='http://localhost:3000';
 const LOCK_KEYS={enabled:'op_lock_enabled',hash:'op_lock_hash'};
+const SUPABASE_URL='https://tottcggacwdlbcrydixu.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRvdHRjZ2dhY3dkbGJjcnlkaXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NDg5MzEsImV4cCI6MjEwNTIyNDkzMX0.8W6JBpxF0mRrB0VDklbvohehBtR-jzsCe8Ae5k4Iewg';
 async function sha256(text){const enc=new TextEncoder().encode(text);const buf=await crypto.subtle.digest('SHA-256',enc);return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}
 function isLockEnabled(){return localStorage.getItem(LOCK_KEYS.enabled)==='1';}
 function getStoredHash(){return localStorage.getItem(LOCK_KEYS.hash)||'';}
@@ -967,6 +976,45 @@ function detectProfessionId(text){
   if(!text) return null;
   for(const [id,re] of PROF_CATS) if(re.test(text)) return id;
   return null;
+}
+async function syncLeadToSupabase(c){
+  try{
+    const s=getSettings();
+    if(s.cloudSync===false) return;
+    if(!c||!c.name||!c.rawUrl) return;
+    const body={
+      name:c.name||null,
+      profession:c.prof||null,
+      city:c.city||null,
+      country:(c.country||(typeof GS!=='undefined'&&GS.country?GS.country.name:null)||null),
+      phone:c.phone||null,
+      website:c.website_url||null,
+      rating:c.rating?parseFloat(c.rating):null,
+      reviews:c.reviews?parseInt(c.reviews,10):null,
+      maps_url:c.rawUrl||null,
+      vertical:detectProfessionId((c.prof||'')+' '+(c.name||'')),
+      source:c.source||'extracted',
+      analysis:{usps:c.usps||null,selectedUSP:c.selectedUSP||null,insights:c.insights||null,competitors:c.competitors||null,gapAnalysis:c.gapAnalysis||null}
+    };
+    if(isNaN(body.rating)) body.rating=null;
+    if(isNaN(body.reviews)) body.reviews=null;
+    const apikey=SUPABASE_ANON_KEY;
+    const base=SUPABASE_URL;
+    const q=encodeURIComponent(c.rawUrl);
+    let leadId=null;
+    try{
+      const chk=await fetch(base+'/rest/v1/leads?maps_url=eq.'+q+'&select=id',{headers:{'apikey':apikey,'Authorization':'Bearer '+apikey}});
+      if(chk.ok){ const arr=await chk.json(); if(Array.isArray(arr)&&arr[0]&&arr[0].id) leadId=arr[0].id; }
+    }catch(e){}
+    if(leadId){
+      await fetch(base+'/rest/v1/leads?maps_url=eq.'+q,{method:'PATCH',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey,'Prefer':'return=minimal'},body:JSON.stringify(body)});
+    }else{
+      const r=await fetch(base+'/rest/v1/leads',{method:'POST',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey,'Prefer':'return=representation'},body:JSON.stringify(body)});
+      if(r.ok){ try{ const j=await r.json(); if(Array.isArray(j)&&j[0]&&j[0].id) leadId=j[0].id; }catch(e){} }
+      if(!leadId) return;
+    }
+    await fetch(base+'/rest/v1/history',{method:'POST',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey,'Prefer':'return=minimal'},body:JSON.stringify({lead_id:leadId,source_type:c.source||'extracted'})});
+  }catch(e){}
 }
 
 var go = lockGate(function(n){
@@ -2830,6 +2878,7 @@ function saveOrUpdate(){
   if(localStorage.getItem('op_auto_leads')==='true') addLeadFromClient(client);
   toast('Saved ✓');
   notifyChange();
+  try{ const _s=getSettings(); if(_s.cloudSync!==false) syncLeadToSupabase(fullClient).catch(()=>{}); }catch(e){}
 }
 function renderHistory(){
   const q=($('#histSearch')?.value||'').trim().toLowerCase();
@@ -2902,6 +2951,7 @@ function saveAnalysisOnly(){
   client.source = 'analysis-only';
   lastPrompts = {};
   saveOrUpdate();
+  try{ const _cs=getSettings(); if(_cs.cloudSync!==false) syncLeadToSupabase({...client,source:'analysis-only'}).catch(()=>{}); }catch(e){}
   sessionSaved = true; updateSaveBtn();
   toast('💾 Saved ✓ Analysis');
 }
@@ -2995,6 +3045,7 @@ function openSettings(){
   const s = getSettings();
   $('#set_proxy').value = s.proxyUrl || '';
   $('#set_jina').checked = s.jina !== false;
+  const _cs2=$('#set_cloudSync'); if(_cs2) _cs2.checked = s.cloudSync !== false;
   updateKeyStatus();
   testBackend();
   const lockOn=isLockEnabled(), hashExists=!!getStoredHash();
@@ -3046,7 +3097,8 @@ async function saveSettings(){
     localStorage.removeItem(LOCK_KEYS.enabled);
     localStorage.removeItem(LOCK_KEYS.hash);
   }
-  const data = { proxyUrl: $('#set_proxy').value.trim(), jina: $('#set_jina').checked };
+  const _csEl=$('#set_cloudSync'); const _cloudSync=_csEl ? _csEl.checked : true;
+  const data = { proxyUrl: $('#set_proxy').value.trim(), jina: $('#set_jina').checked, cloudSync: _cloudSync };
   try {
     localStorage.setItem(LS_S, JSON.stringify(data));
     const verify = JSON.parse(localStorage.getItem(LS_S) || '{}');
