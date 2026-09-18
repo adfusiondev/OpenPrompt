@@ -200,8 +200,16 @@ Make sure the JSON is valid and all strings are properly escaped.`;
         } catch {}
       }
       if (!parsed || !parsed.message) {
-        lastErr = `${model}: could not parse JSON from: ${text.slice(0, 800)}`;
-        continue;
+        // Ultimate fallback: Gemini returned plain text, treat whole text as message
+        if (cleaned.length > 20 && !cleaned.includes('"message"')) {
+          const lines = cleaned.split('\n').map(v=>v.trim()).filter(Boolean);
+          const msg = cleaned.replace(/^```[\s\S]*?```/g,'').trim() || text.trim();
+          if (msg.length > 20) parsed = { message: msg.slice(0, 2000), subject: lines[0]?.slice(0, 80) || 'Outreach', cta: msg.split('?')[0].split('.').pop()?.trim().slice(0,120) || '' };
+        }
+        if (!parsed || !parsed.message) {
+          lastErr = `${model}: could not parse JSON from: ${text.slice(0, 800)}`;
+          continue;
+        }
       }
 
       // Success
