@@ -142,7 +142,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
       const payload = {
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 900 },
+        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
       };
       const r = await fetch(url, {
         method: 'POST',
@@ -189,6 +189,18 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       // Lenient fallback: extract fields via regex if strict JSON failed (handles unescaped newlines)
       if (!parsed || !parsed.message) {
         try {
+          // Handle truncated JSON (message string cut off before closing ")
+          let truncated = false;
+          if (cleaned.startsWith("{") && cleaned.includes("\"message\"") && !cleaned.includes("\"subject\"")) {
+            // truncated mid-message: extract what we have
+            const m2 = cleaned.match(/"message"\s*:\s*"([\s\S]*)/);
+            if (m2) {
+              let partial = m2[1].replace(/\n/g, "\n").replace(/\\"/g, '"').replace(/\\\//g, '/');
+              // trim trailing incomplete escape
+              partial = partial.replace(/\\$/,"").replace(/"\s*[,}]?\s*$/,"");
+              if (partial.length > 20) parsed = { message: partial.slice(0,2000).trim() + (partial.length>10?"...":""), subject: "Outreach — " + (cleaned.match(/"subject"/) ? "" : "Free audit"), cta: "" };
+            }
+          }
           const msgM = cleaned.match(/"message"\s*:\s*"([\s\S]*?)"\s*,\s*"subject"/);
           const subjM = cleaned.match(/"subject"\s*:\s*"([^"]*)"/);
           const ctaM = cleaned.match(/"cta"\s*:\s*"([^"]*)"/);
