@@ -142,7 +142,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
       const payload = {
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 600 },
+        generationConfig: { temperature: 0.8, maxOutputTokens: 900 },
       };
       const r = await fetch(url, {
         method: 'POST',
@@ -181,14 +181,26 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       try {
         parsed = JSON.parse(cleaned);
       } catch {
-        // Try to extract JSON object
         const m = cleaned.match(/\{[\s\S]*\}/);
         if (m) {
           try { parsed = JSON.parse(m[0]); } catch {}
         }
       }
+      // Lenient fallback: extract fields via regex if strict JSON failed (handles unescaped newlines)
       if (!parsed || !parsed.message) {
-        lastErr = `${model}: could not parse JSON from: ${text.slice(0, 300)}`;
+        try {
+          const msgM = cleaned.match(/"message"\s*:\s*"([\s\S]*?)"\s*,\s*"subject"/);
+          const subjM = cleaned.match(/"subject"\s*:\s*"([^"]*)"/);
+          const ctaM = cleaned.match(/"cta"\s*:\s*"([^"]*)"/);
+          if (msgM && msgM[1]) {
+            // unescape \n and \"
+            const rawMsg = msgM[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/');
+            parsed = { message: rawMsg, subject: subjM ? subjM[1] : '', cta: ctaM ? ctaM[1] : '' };
+          }
+        } catch {}
+      }
+      if (!parsed || !parsed.message) {
+        lastErr = `${model}: could not parse JSON from: ${text.slice(0, 800)}`;
         continue;
       }
 
