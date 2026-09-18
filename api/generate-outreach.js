@@ -65,6 +65,7 @@ module.exports = async function handler(req, res) {
     return json(res, 405, { error: 'Method not allowed, use POST' });
   }
 
+  console.log('[outreach] handler version 3df478a-fallback-v2');
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return json(res, 503, { error: 'GEMINI_API_KEY not configured', code: 'NO_KEY' });
