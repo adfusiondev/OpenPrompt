@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
   }
 
   const t0 = Date.now();
-  console.log('[outreach] handler version 959e376-retry-v3 hobby-10s');
+  console.log('[outreach] handler version a1b2c3-retry-v4 circuit+abort+fallback');
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return json(res, 503, { error: 'GEMINI_API_KEY not configured', code: 'NO_KEY' });
@@ -136,11 +136,8 @@ OUTPUT: Return ONLY valid JSON (no markdown, no code fence) with exactly 3 keys:
 Make sure the JSON is valid and all strings are properly escaped.`;
 
   const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
-  const RETRY_DELAYS = [2000, 5000, 10000]; // per-model exponential backoff
+  const RETRY_DELAYS = [3000, 8000, 15000, 20000]; // per-model exponential backoff (4 retries) + circuit breaker guard
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  let lastErr = '';
-  let lastStatus = 502;
-
   function staticFallback() {
     const cityPart = lead.city ? (language==='fr' ? ` à ${lead.city}` : language==='ar' ? ` في ${lead.city}` : ` in ${lead.city}`) : '';
     const ratingPart = lead.rating ? `${lead.rating}★` : '';
@@ -164,20 +161,36 @@ Make sure the JSON is valid and all strings are properly escaped.`;
     return { message: msg, subject: subj, cta };
   }
 
+  // simple in-memory circuit breaker: if >3 failures in 60s, skip Gemini entirely
+  global.__outreachCB = global.__outreachCB || { fails: [], openUntil: 0 };
+  if (Date.now() < global.__outreachCB.openUntil) {
+    console.log('[outreach] circuit open — skipping Gemini, fallback now');
+    const fb = staticFallback(); return json(res, 200, { ...fb, fallback: true, note: 'Gemini unavailable — using template (circuit open)' });
+  }
+  let lastErr = '';
+  let lastStatus = 502;
+
+
   for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      console.log(`[outreach] attempt model=${model} try=${attempt+1}/3 lead=${lead.name} lang=${language}`);
+      console.log(`[outreach] attempt model=${model} try=${attempt+1}/4 lead=${lead.name} lang=${language}`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
       const payload = {
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
         generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
       };
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const ac = new AbortController();
+      const tmr = setTimeout(() => ac.abort(), 7000);
+      let r;
+      try {
+        r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: ac.signal,
+        });
+      } finally { clearTimeout(tmr); }
       const data = await r.json().catch(() => ({}));
 
       if (!r.ok) {
@@ -194,8 +207,12 @@ Make sure the JSON is valid and all strings are properly escaped.`;
           console.log(`[outreach] model ${model} not available, switching model`);
           break;
         }
-        if (isRetryable && attempt < 2) {
-          if (Date.now() - t0 > 8000) { console.log('[outreach] time budget exceeded, using fallback'); break; }
+        if (isRetryable) global.__outreachCB.fails.push(Date.now());
+        // trim fails older than 60s
+        global.__outreachCB.fails = global.__outreachCB.fails.filter(ts => Date.now() - ts < 60000);
+        if (global.__outreachCB.fails.length >= 5) { global.__outreachCB.openUntil = Date.now() + 30000; console.log('[outreach] circuit tripped 5 fails/60s — open 30s'); }
+        if (isRetryable && attempt < 3) {
+          if (Date.now() - t0 > 8000) { console.log('[outreach] time budget exceeded (8s), using fallback now'); const fb = staticFallback(); return json(res, 200, { ...fb, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); }
           const d = RETRY_DELAYS[attempt] || 5000;
           console.log(`[outreach] retryable ${r.status}, waiting ${d}ms before retry`);
           await sleep(d);
@@ -214,7 +231,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       if (!text) {
         lastErr = `${model} attempt ${attempt+1}: empty response`;
         console.log(`[outreach] ${lastErr}`);
-        if (attempt < 2) { if (Date.now()-t0>8000) break; await sleep(RETRY_DELAYS[attempt]); continue; }
+        if (attempt < 3) { if (Date.now()-t0>8000) { const fb2 = staticFallback(); return json(res, 200, { ...fb2, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); } await sleep(RETRY_DELAYS[attempt]); continue; }
         break;
       }
 
@@ -267,7 +284,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
         if (!parsed || !parsed.message) {
           lastErr = `${model} attempt ${attempt+1}: could not parse JSON from: ${text.slice(0, 800)}`;
           console.log(`[outreach] ${lastErr}`);
-          if (attempt < 2) { if (Date.now()-t0>8000) break; await sleep(RETRY_DELAYS[attempt]); continue; }
+          if (attempt < 3) { if (Date.now()-t0>8000) { const fb2 = staticFallback(); return json(res, 200, { ...fb2, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); } await sleep(RETRY_DELAYS[attempt]); continue; }
           break;
         }
       }
@@ -282,7 +299,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       lastErr = `${model} attempt ${attempt+1}: ${e.message}`;
       lastStatus = 502;
       console.log(`[outreach] exception ${lastErr}`);
-      if (attempt < 2) { if (Date.now()-t0>8000) break; await sleep(RETRY_DELAYS[attempt]); continue; }
+      if (attempt < 3) { if (Date.now()-t0>8000) { const fb2 = staticFallback(); return json(res, 200, { ...fb2, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); } await sleep(RETRY_DELAYS[attempt]); continue; }
       break;
     }
     } // end attempt loop
