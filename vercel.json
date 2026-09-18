@@ -13,20 +13,12 @@
     {
       "src": "index.html",
       "use": "@vercel/static"
-    },
-    {
-      "src": "api/version.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/generate-outreach",
       "dest": "/api/generate-outreach.js"
-    },
-    {
-      "src": "/api/version",
-      "dest": "/api/version.js"
     },
     {
       "src": "/api/(.*)",

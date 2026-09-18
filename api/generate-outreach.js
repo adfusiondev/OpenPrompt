@@ -65,7 +65,8 @@ module.exports = async function handler(req, res) {
     return json(res, 405, { error: 'Method not allowed, use POST' });
   }
 
-  console.log('[outreach] handler version 3df478a-fallback-v2');
+  const t0 = Date.now();
+  console.log('[outreach] handler version 959e376-retry-v3 hobby-10s');
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return json(res, 503, { error: 'GEMINI_API_KEY not configured', code: 'NO_KEY' });
@@ -194,6 +195,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
           break;
         }
         if (isRetryable && attempt < 2) {
+          if (Date.now() - t0 > 8000) { console.log('[outreach] time budget exceeded, using fallback'); break; }
           const d = RETRY_DELAYS[attempt] || 5000;
           console.log(`[outreach] retryable ${r.status}, waiting ${d}ms before retry`);
           await sleep(d);
@@ -212,7 +214,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       if (!text) {
         lastErr = `${model} attempt ${attempt+1}: empty response`;
         console.log(`[outreach] ${lastErr}`);
-        if (attempt < 2) { await sleep(RETRY_DELAYS[attempt]); continue; }
+        if (attempt < 2) { if (Date.now()-t0>8000) break; await sleep(RETRY_DELAYS[attempt]); continue; }
         break;
       }
 
@@ -265,7 +267,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
         if (!parsed || !parsed.message) {
           lastErr = `${model} attempt ${attempt+1}: could not parse JSON from: ${text.slice(0, 800)}`;
           console.log(`[outreach] ${lastErr}`);
-          if (attempt < 2) { await sleep(RETRY_DELAYS[attempt]); continue; }
+          if (attempt < 2) { if (Date.now()-t0>8000) break; await sleep(RETRY_DELAYS[attempt]); continue; }
           break;
         }
       }
@@ -280,7 +282,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
       lastErr = `${model} attempt ${attempt+1}: ${e.message}`;
       lastStatus = 502;
       console.log(`[outreach] exception ${lastErr}`);
-      if (attempt < 2) { await sleep(RETRY_DELAYS[attempt]); continue; }
+      if (attempt < 2) { if (Date.now()-t0>8000) break; await sleep(RETRY_DELAYS[attempt]); continue; }
       break;
     }
     } // end attempt loop
