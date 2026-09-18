@@ -31,7 +31,7 @@
   ],
   "functions": {
     "api/generate-outreach.js": {
-      "maxDuration": 30
+      "maxDuration": 10
     }
   }
 }
