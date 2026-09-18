@@ -28,6 +28,8 @@ const OFFER_MAP = {
   free_audit:        { en: 'a free audit of your Google visibility & online presence', fr: 'un audit gratuit de votre visibilité Google', ar: 'تدقيق مجاني لحضوركم على Google' },
   landing_redesign:  { en: 'a complete landing page redesign optimized for conversions', fr: 'une refonte complète de votre landing page optimisée pour la conversion', ar: 'إعادة تصميم كاملة لصفحتكم المقصودة' },
   consultation:      { en: 'a 15-minute consultation to discuss growth opportunities', fr: 'une consultation de 15 minutes pour discuter de vos opportunités de croissance', ar: 'استشارة لمدة 15 دقيقة لمناقشة فرص النمو' },
+  followup_gentle:   { en: 'a new way to boost your visibility and reach more local customers', fr: 'une nouvelle facon de booster votre visibilite et atteindre plus de clients locaux', ar: 'طريقة جديدة لتحسين ظهوركم والوصول إلى عملاء محليين أكثر' },
+  followup_final:    { en: 'this opportunity', fr: 'cette opportunite', ar: 'هذه الفرصة' },
 };
 
 const TONE_MAP = {
@@ -66,7 +68,7 @@ module.exports = async function handler(req, res) {
   }
 
   const t0 = Date.now();
-  console.log('[outreach] handler version a1b2c3-retry-v4 circuit+abort+fallback');
+  console.log('[outreach] handler version a1b2c3-followup-v5 circuit+abort+fallback');
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return json(res, 503, { error: 'GEMINI_API_KEY not configured', code: 'NO_KEY' });
@@ -87,7 +89,7 @@ module.exports = async function handler(req, res) {
   if (!lead.name) return json(res, 400, { error: 'lead.name is required' });
   if (!['ar','fr','en'].includes(language)) return json(res, 400, { error: 'language must be ar|fr|en' });
   if (!['friendly','professional','direct'].includes(tone)) return json(res, 400, { error: 'tone must be friendly|professional|direct' });
-  if (!['free_audit','landing_redesign','consultation'].includes(offer)) return json(res, 400, { error: 'offer must be free_audit|landing_redesign|consultation' });
+  if (!['free_audit','landing_redesign','consultation','followup_gentle','followup_final'].includes(offer)) return json(res, 400, { error: 'offer must be free_audit|landing_redesign|consultation|followup_gentle|followup_final' });
 
   const vertInfo = (lead.vertical && VERTICAL_LABELS[lead.vertical]) || null;
   const audience = vertInfo ? vertInfo.audience : 'customers';
@@ -98,6 +100,8 @@ module.exports = async function handler(req, res) {
 
   const offerText = (OFFER_MAP[offer] && OFFER_MAP[offer][language]) || OFFER_MAP[offer].en;
   const toneText = (TONE_MAP[tone] && TONE_MAP[tone][language]) || TONE_MAP[tone].en;
+  const isFollowup = offer === 'followup_gentle' || offer === 'followup_final';
+  const isFinal = offer === 'followup_final';
 
   // Build system prompt per spec
   const systemPrompt = `You are an expert WhatsApp direct-response copywriter for local businesses in Morocco.
@@ -116,7 +120,19 @@ OFFER: ${offerText}
 TONE: ${toneText}
 LANGUAGE: ${LANG_INSTRUCTION[language]}
 
+${isFollowup ? `FOLLOW-UP CONTEXT: This is a ${isFinal ? 'FINAL (72h)' : 'GENTLE (48h)'} follow-up to a first message sent ${isFinal ? '~3 days' : '~2 days'} ago that got no reply yet. The recipient already saw the first message.
 CRITICAL MESSAGE RULES (must follow exactly):
+1. Length: ${isFinal ? '40-60 words total — short, light, respectful of their time.' : '60-90 words total — concise, scannable WhatsApp message.'}
+2. Opener: reference the previous message naturally ("just following up on my message from ${isFinal ? 'the other day' : '2 days ago'}"), do NOT repeat the full first pitch.
+3. Add ONE NEW value angle (different from the first message): a concrete benefit or proof point${usp ? ` (e.g. "${usp}")` : ''}${ratingStr ? `, or your ${ratingStr}` : ''}.
+4. ${isFinal
+    ? `Polite close-the-loop tone: it is clearly the last message for now, no pressure, leaves the door open ("should I close your file for now?" style).`
+    : `Gentle reminder tone: helpful, not pushy, no guilt-trip. Present ${offerText}.`}
+5. End with exactly ONE light question CTA${isFinal ? ' (e.g. "Should I close your file for now?" / "Je clôture votre dossier pour l\'instant ?")' : ' (e.g. "Still interested?" / "Toujours intéressé ?")'}.
+6. Max 1 emoji total (keep it subdued).
+7. No hashtags.
+8. End with signature placeholder on its own line: {{YOUR_NAME}}
+9. Do not add subject line inside the message body.` : `CRITICAL MESSAGE RULES (must follow exactly):
 1. 60-90 words total — concise, scannable WhatsApp message.
 2. Opener MUST cite ONE specific fact about the business: either its rating/reviews count (${ratingStr || 'or USP'}) or its top USP ("${usp || 'top service'}"). Do not be generic.
 3. Include ONE pain hint relevant to the ${vertLabel} vertical and its ${audience} (e.g. losing ${audience} to more visible competitors).
@@ -125,7 +141,7 @@ CRITICAL MESSAGE RULES (must follow exactly):
 6. Max 2 emojis total.
 7. No hashtags.
 8. End with signature placeholder on its own line: {{YOUR_NAME}}
-9. Do not add subject line inside the message body.
+9. Do not add subject line inside the message body.`}
 
 OUTPUT: Return ONLY valid JSON (no markdown, no code fence) with exactly 3 keys:
 {
@@ -145,7 +161,37 @@ Make sure the JSON is valid and all strings are properly escaped.`;
     const ratingPhrase = ratingPart ? `${ratingPart}${reviewsPart}${cityPart}` : (usp ? `"${usp}"` : cityPart || vertLabel);
     // offerText already localized
     let msg, subj, cta;
-    if (language === 'fr') {
+    if (isFinal) {
+      // 72h final touch: 40-60 words, close-the-loop, door open
+      if (language === 'fr') {
+        msg = `Bonjour ${lead.name}, juste un dernier petit message pour clôturer la boucle 🙏 Si ce n'est pas le bon moment, je ferme votre dossier pour maintenant — pas de pression. Si jamais vous changez d'avis sur ${offerText}, ma porte reste ouverte. Je clôture votre dossier pour l'instant ?\n{{YOUR_NAME}}`;
+        subj = `Dernier message pour ${lead.name}`;
+        cta = `Je clôture votre dossier pour l'instant ?`;
+      } else if (language === 'ar') {
+        msg = `مرحبا ${lead.name}، رسالة أخيرة فقط لإغلاق الملف 🙏 إذا لم يكن الوقت مناسباً سأغلق ملفكم الآن — دون أي ضغط. وإذا تغير رأيكم حول ${offerText}، الباب يبقى مفتوحاً. هل أغلق ملفكم في الوقت الحالي؟\n{{YOUR_NAME}}`;
+        subj = `رسالة أخيرة لـ ${lead.name}`;
+        cta = `هل أغلق ملفكم في الوقت الحالي؟`;
+      } else {
+        msg = `Hi ${lead.name}, just one last message to close the loop 🙏 If the timing isn't right I'll close your file for now — no pressure at all. If you ever change your mind about ${offerText}, the door stays open. Should I close your file for now?\n{{YOUR_NAME}}`;
+        subj = `Last message for ${lead.name}`;
+        cta = `Should I close your file for now?`;
+      }
+    } else if (isFollowup) {
+      // 48h gentle: 60-90 words, new angle, light question
+      if (language === 'fr') {
+        msg = `Bonjour ${lead.name} ! 👋 Juste un petit suivi de mon message d'il y a 2 jours. Un nouvel angle qui pourrait vous intéresser : ${ratingPart ? `avec votre ${ratingPhrase}` : usp ? `"${usp}"` : 'valeur clé'}, ${offerText} pourrait faire une vraie différence pour vos ${audience}. Toujours intéressé ?\n{{YOUR_NAME}}`;
+        subj = `Suivi pour ${lead.name}`;
+        cta = `Toujours intéressé ?`;
+      } else if (language === 'ar') {
+        msg = `مرحبا ${lead.name} ! 👋 متابعة بسيطة لرسالتي من قبل يومين. زاوية جديدة قد تهمكم: ${ratingPart ? `بتقييمكم ${ratingPhrase}` : usp ? `"${usp}"` : 'قيمتكم الأساسية'}، ${offerText} يمكن أن يصنع فرقاً حقيقياً لـ ${audience} لديكم. هل ما زلتم مهتمين؟\n{{YOUR_NAME}}`;
+        subj = `متابعة لـ ${lead.name}`;
+        cta = `هل ما زلتم مهتمين؟`;
+      } else {
+        msg = `Hi ${lead.name} ! 👋 Just following up on my message from 2 days ago. One new angle that might interest you: ${ratingPart ? `with your ${ratingPhrase}` : usp ? `"${usp}"` : 'your core value'}, ${offerText} could make a real difference for your ${audience}. Still interested ?\n{{YOUR_NAME}}`;
+        subj = `Follow-up for ${lead.name}`;
+        cta = `Still interested ?`;
+      }
+    } else if (language === 'fr') {
       msg = `Bonjour ${lead.name} ! 👋 Félicitations pour votre note de ${ratingPhrase} ! Beaucoup de ${audience} vous cherchent sans vous trouver face à des concurrents plus visibles. Nous proposons ${offerText}. Intéressé par un créneau cette semaine ?\n{{YOUR_NAME}}`;
       subj = `Audit gratuit pour ${lead.name}`;
       cta = `Intéressé par un créneau cette semaine ?`;
