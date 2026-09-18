@@ -134,11 +134,38 @@ OUTPUT: Return ONLY valid JSON (no markdown, no code fence) with exactly 3 keys:
 Make sure the JSON is valid and all strings are properly escaped.`;
 
   const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+  const RETRY_DELAYS = [2000, 5000, 10000]; // per-model exponential backoff
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   let lastErr = '';
   let lastStatus = 502;
 
+  function staticFallback() {
+    const cityPart = lead.city ? (language==='fr' ? ` à ${lead.city}` : language==='ar' ? ` في ${lead.city}` : ` in ${lead.city}`) : '';
+    const ratingPart = lead.rating ? `${lead.rating}★` : '';
+    const reviewsPart = lead.reviews ? ` (${lead.reviews} ${language==='fr' ? 'avis' : language==='ar' ? 'تقييم' : 'reviews'})` : '';
+    const ratingPhrase = ratingPart ? `${ratingPart}${reviewsPart}${cityPart}` : (usp ? `"${usp}"` : cityPart || vertLabel);
+    // offerText already localized
+    let msg, subj, cta;
+    if (language === 'fr') {
+      msg = `Bonjour ${lead.name} ! 👋 Félicitations pour votre note de ${ratingPhrase} ! Beaucoup de ${audience} vous cherchent sans vous trouver face à des concurrents plus visibles. Nous proposons ${offerText}. Intéressé par un créneau cette semaine ?\n{{YOUR_NAME}}`;
+      subj = `Audit gratuit pour ${lead.name}`;
+      cta = `Intéressé par un créneau cette semaine ?`;
+    } else if (language === 'ar') {
+      msg = `مرحبا ${lead.name} ! 👋 مبروك على تقييم ${ratingPhrase} ! الكثير من ${audience} يبحثون عنكم دون أن يجدوكم بسبب المنافسة. نقترح ${offerText}. هل نحدد موعداً هذا الأسبوع؟\n{{YOUR_NAME}}`;
+      subj = `عرض مجاني لـ ${lead.name}`;
+      cta = `هل نحدد موعداً هذا الأسبوع؟`;
+    } else {
+      msg = `Hi ${lead.name} ! 👋 Congrats on your ${ratingPhrase} ! Many potential ${audience} can't find you while more visible competitors win them over. We offer ${offerText}. Shall we schedule a call this week?\n{{YOUR_NAME}}`;
+      subj = `Quick win for ${lead.name}`;
+      cta = `Shall we schedule a call this week?`;
+    }
+    return { message: msg, subject: subj, cta };
+  }
+
   for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
     try {
+      console.log(`[outreach] attempt model=${model} try=${attempt+1}/3 lead=${lead.name} lang=${language}`);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
       const payload = {
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
@@ -153,23 +180,39 @@ Make sure the JSON is valid and all strings are properly escaped.`;
 
       if (!r.ok) {
         const t = typeof data === 'string' ? data : JSON.stringify(data || {});
-        lastErr = `${model}: HTTP ${r.status} — ${t.slice(0, 400)}`;
+        lastErr = `${model} attempt ${attempt+1}: HTTP ${r.status} — ${t.slice(0, 400)}`;
         lastStatus = r.status;
-        const isFallbackable = r.status === 404 || r.status === 429 ||
-          (r.status === 503 && /high demand|overload|resource exhausted|temporarily unavailable/i.test(t)) ||
-          /not found|not available|unsupported|deprecated/i.test(t);
+        console.log(`[outreach] ${lastErr}`);
         if (r.status === 503 && data && data.code === 'NO_KEY') {
           return json(res, 503, { error: 'GEMINI_API_KEY missing', code: 'NO_KEY' });
         }
-        if (isFallbackable) continue;
+        const isRetryable = r.status === 429 || r.status === 503 || r.status === 502 || r.status === 500;
+        const isFallbackable = r.status === 404 || /not found|not available|unsupported|deprecated/i.test(t);
+        if (isFallbackable) {
+          console.log(`[outreach] model ${model} not available, switching model`);
+          break;
+        }
+        if (isRetryable && attempt < 2) {
+          const d = RETRY_DELAYS[attempt] || 5000;
+          console.log(`[outreach] retryable ${r.status}, waiting ${d}ms before retry`);
+          await sleep(d);
+          continue;
+        }
+        if (isRetryable) {
+          // exhausted retries for this model, try next model
+          console.log(`[outreach] retries exhausted for ${model}, trying next model`);
+          break;
+        }
         break;
       }
 
       // Extract text
       const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
       if (!text) {
-        lastErr = `${model}: empty response`;
-        continue;
+        lastErr = `${model} attempt ${attempt+1}: empty response`;
+        console.log(`[outreach] ${lastErr}`);
+        if (attempt < 2) { await sleep(RETRY_DELAYS[attempt]); continue; }
+        break;
       }
 
       // Try to parse JSON from text (strip fences if any)
@@ -219,8 +262,10 @@ Make sure the JSON is valid and all strings are properly escaped.`;
           if (msg.length > 20) parsed = { message: msg.slice(0, 2000), subject: lines[0]?.slice(0, 80) || 'Outreach', cta: msg.split('?')[0].split('.').pop()?.trim().slice(0,120) || '' };
         }
         if (!parsed || !parsed.message) {
-          lastErr = `${model}: could not parse JSON from: ${text.slice(0, 800)}`;
-          continue;
+          lastErr = `${model} attempt ${attempt+1}: could not parse JSON from: ${text.slice(0, 800)}`;
+          console.log(`[outreach] ${lastErr}`);
+          if (attempt < 2) { await sleep(RETRY_DELAYS[attempt]); continue; }
+          break;
         }
       }
 
@@ -231,11 +276,17 @@ Make sure the JSON is valid and all strings are properly escaped.`;
         cta: String(parsed.cta || '').trim(),
       });
     } catch (e) {
-      lastErr = `${GEMINI_MODELS[0]}: ${e.message}`;
+      lastErr = `${model} attempt ${attempt+1}: ${e.message}`;
       lastStatus = 502;
+      console.log(`[outreach] exception ${lastErr}`);
+      if (attempt < 2) { await sleep(RETRY_DELAYS[attempt]); continue; }
       break;
     }
+    } // end attempt loop
   }
 
-  return json(res, lastStatus === 404 ? 502 : lastStatus, { error: lastErr || 'Gemini request failed' });
+  // All Gemini attempts failed — static fallback (never a raw 503)
+  const fb = staticFallback();
+  console.log(`[outreach] all Gemini models failed (${lastErr}), using static fallback lang=${language} vertical=${lead.vertical || vertLabel}`);
+  return json(res, 200, { ...fb, fallback: true, note: 'Gemini unavailable — using template' });
 };

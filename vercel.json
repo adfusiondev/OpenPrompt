@@ -28,5 +28,10 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/generate-outreach.js": {
+      "maxDuration": 30
+    }
+  }
 }
