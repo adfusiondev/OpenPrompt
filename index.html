@@ -93,6 +93,16 @@ pre.prompt[contenteditable="true"]{outline:none}
 #toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--light); color:var(--dark);
   padding:10px 24px; border-radius:6px; font-weight:700; opacity:0; transition:.3s; pointer-events:none; z-index:60}
 #toast.show{opacity:1}
+#dupOverlay{position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
+#dupOverlay.open{display:flex}
+#dupOverlay .panel{max-width:640px;width:100%;max-height:90vh;overflow:auto; border:1px solid var(--warn)}
+.dup-item{border:1px solid var(--border); border-radius:6px; padding:12px 14px; margin-top:10px}
+.dup-item .dup-meta{display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:14px}
+.dup-item .dup-pct{color:var(--warn); font-weight:700}
+.dup-item .muted{color:var(--muted); font-size:12px}
+.dup-btns{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+.dup-btns .btn{padding:6px 12px; font-size:12px}
+
 .hidden{display:none}
 
 .log{background:#0a0a09; border:1px solid var(--border); border-radius:6px; padding:12px 14px;
@@ -590,6 +600,14 @@ pre.prompt[contenteditable="true"]{outline:none}
 </div>
 <button id="diagBtn" onclick="openDiag()" title="Diagnostic report" style="position:fixed;bottom:24px;left:24px;z-index:80;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 14px;cursor:pointer;font-size:13px">🐞 Report <span id="diagCount" style="color:var(--err)"></span></button>
 <div id="toast"></div>
+<div id="dupOverlay" onclick="if(event.target===this)dupAction(null,'reject')">
+  <div class="panel">
+    <h1 style="font-size:18px; color:var(--warn)">⚠ Potential duplicate detected</h1>
+    <p class="sub" id="dupIntro"></p>
+    <div id="dupList"></div>
+    <div class="key-help" style="margin-top:12px">Update merges this extraction into the existing lead. Reject cancels. Save separately creates a new lead.</div>
+  </div>
+</div>
 
 <script>
 const $=s=>document.querySelector(s);
@@ -977,7 +995,7 @@ function detectProfessionId(text){
   for(const [id,re] of PROF_CATS) if(re.test(text)) return id;
   return null;
 }
-async function syncLeadToSupabase(c){
+async function syncLeadToSupabase(c, skipDup){
   try{
     const s=getSettings();
     if(s.cloudSync===false) return;
@@ -1000,6 +1018,19 @@ async function syncLeadToSupabase(c){
     if(isNaN(body.reviews)) body.reviews=null;
     const apikey=SUPABASE_ANON_KEY;
     const base=SUPABASE_URL;
+    if(!skipDup && c.name && c.city){
+      try{
+        const dr=await fetch(base+'/rest/v1/rpc/check_duplicate_lead',{method:'POST',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey},body:JSON.stringify({new_name:c.name,new_city:c.city})});
+        if(dr.ok){
+          const arr=await dr.json();
+          if(Array.isArray(arr)&&arr.length){
+            pendingDup={client:c,body:body,dups:arr};
+            showDupModal(arr,c.city,c.name);
+            return;
+          }
+        }
+      }catch(e){ console.error('dup-check failed — proceeding with insert',e); }
+    }
     const q=encodeURIComponent(c.rawUrl);
     let leadId=null;
     try{
@@ -1015,6 +1046,49 @@ async function syncLeadToSupabase(c){
     }
     await fetch(base+'/rest/v1/history',{method:'POST',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey,'Prefer':'return=minimal'},body:JSON.stringify({lead_id:leadId,source_type:c.source||'extracted'})});
   }catch(e){}
+}
+
+
+let pendingDup=null;
+function escDup(s){ return String(s||'').replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];}); }
+function showDupModal(dups,city,name){
+  const list=$('#dupList'); list.innerHTML='';
+  $('#dupIntro').innerHTML='We found <b>'+dups.length+'</b> existing lead(s) with a similar name in <b>'+escDup(city)+'</b>:';
+  dups.forEach(function(d){
+    const pct=Math.round((d.similarity||0)*100);
+    const div=document.createElement('div');
+    div.className='dup-item';
+    div.innerHTML='<div class="dup-meta"><b>'+escDup(d.name)+'</b> <span class="dup-pct">'+pct+'% match</span>'+
+      (d.profession?' <span class="muted">· '+escDup(d.profession)+'</span>':'')+
+      (d.phone?' <span class="muted">· '+escDup(d.phone)+'</span>':'')+
+      (d.vertical?' <span class="muted">· '+escDup(d.vertical)+'</span>':'')+
+      '</div><div class="dup-btns">'+
+      '<button type="button" class="btn small" onclick="dupAction(\''+d.id+'\',\'update\')">Update this lead</button>'+
+      '<button type="button" class="btn small ghost" onclick="dupAction(null,\'reject\')">Reject</button>'+
+      '<button type="button" class="btn small ghost" onclick="dupAction(null,\'separate\')">Save as separate lead</button>'+
+      '</div>';
+    list.appendChild(div);
+  });
+  $('#dupOverlay').classList.add('open');
+}
+async function dupAction(id,mode){
+  const pd=pendingDup;
+  $('#dupOverlay').classList.remove('open');
+  pendingDup=null;
+  if(!pd) return;
+  const apikey=SUPABASE_ANON_KEY, base=SUPABASE_URL;
+  if(mode==='update'){
+    const mergeBody=Object.assign({},pd.body,{outreach_ready:false,contact_status:'new'});
+    try{
+      await fetch(base+'/rest/v1/leads?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey,'Prefer':'return=minimal'},body:JSON.stringify(mergeBody)});
+      await fetch(base+'/rest/v1/history',{method:'POST',headers:{'Content-Type':'application/json','apikey':apikey,'Authorization':'Bearer '+apikey,'Prefer':'return=minimal'},body:JSON.stringify({lead_id:id,source_type:pd.client.source||'extracted'})});
+      toast('✓ Updated existing lead');
+    }catch(e){ toast('Update failed — check cloud sync'); }
+  }else if(mode==='separate'){
+    syncLeadToSupabase(pd.client, true).catch(function(){});
+  }else{
+    toast('Extraction cancelled');
+  }
 }
 
 var go = lockGate(function(n){
