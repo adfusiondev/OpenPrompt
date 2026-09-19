@@ -59,6 +59,40 @@ function json(res, status, obj) {
   res.status(status).json(obj);
 }
 
+// BUG B: localized audience words so 'customers' never leaks into FR/AR templates
+const AUDIENCE_L10N = {
+  fr: { patients: 'patients', customers: 'clients', clients: 'clients', travelers: 'voyageurs' },
+  ar: { patients: '\u0645\u0631\u0636\u0649', customers: '\u0627\u0644\u0639\u0645\u0644\u0627\u0621', clients: '\u0627\u0644\u0639\u0645\u0644\u0627\u0621', travelers: '\u0627\u0644\u0645\u0633\u0627\u0641\u0631\u064a\u0646' },
+  en: { patients: 'patients', customers: 'customers', clients: 'clients', travelers: 'travelers' },
+};
+
+// BUG C: collapse any literal backslash-n (double-escaped JSON) into real newlines
+function normalizeNewlines(t) {
+  return String(t == null ? '' : t).replace(/\\n/g, '\n');
+}
+
+// BUG B: FR template quality lint — flag English words leaking into French text
+const FR_EN_LEAK = ['customers', 'users', 'people', 'feedback'];
+function frEnglishLint(text) {
+  const low = String(text || '').toLowerCase();
+  return FR_EN_LEAK.some(function (w) { return new RegExp('\\b' + w + '\\b').test(low); });
+}
+
+// BUG D: if a truncated message ends mid-sentence, cut to last complete sentence + proper ' ...'
+function truncateToSentence(text) {
+  const t = String(text || '').trim();
+  if (/[.!?\u2026]["')]?\s*$/.test(t)) return t; // already ends on a sentence terminator
+  let cut = -1;
+  const re = /[.!?\u2026]["')]?\s+/g;
+  let m;
+  while ((m = re.exec(t))) cut = m.index;
+  if (cut >= 0) {
+    const s = t.slice(0, cut + 1).trim();
+    if (s.length >= 20) return s + ' ...';
+  }
+  return t.replace(/[.\u2026]+$/, '').trim() + ' ...';
+}
+
 module.exports = async function handler(req, res) {
   const origin = req.headers.origin || '';
   cors(res, origin);
@@ -159,6 +193,7 @@ Make sure the JSON is valid and all strings are properly escaped.`;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   function staticFallback() {
     const cityPart = lead.city ? (language==='fr' ? ` à ${lead.city}` : language==='ar' ? ` في ${lead.city}` : ` in ${lead.city}`) : '';
+    const audL10n = (AUDIENCE_L10N[language] && AUDIENCE_L10N[language][audience]) || audience;
     const ratingPart = lead.rating ? `${lead.rating}★` : '';
     const reviewsPart = lead.reviews ? ` (${lead.reviews} ${language==='fr' ? 'avis' : language==='ar' ? 'تقييم' : 'reviews'})` : '';
     const ratingPhrase = ratingPart ? `${ratingPart}${reviewsPart}${cityPart}` : (usp ? `"${usp}"` : cityPart || vertLabel);
@@ -182,32 +217,34 @@ Make sure the JSON is valid and all strings are properly escaped.`;
     } else if (isFollowup) {
       // 48h gentle: 60-90 words, new angle, light question
       if (language === 'fr') {
-        msg = `Bonjour ${lead.name} ! 👋 Juste un petit suivi de mon message d'il y a 2 jours. Un nouvel angle qui pourrait vous intéresser : ${ratingPart ? `avec votre ${ratingPhrase}` : usp ? `"${usp}"` : 'valeur clé'}, ${offerText} pourrait faire une vraie différence pour vos ${audience}. Toujours intéressé ?\n{{YOUR_NAME}}`;
+        msg = `Bonjour ${lead.name} ! 👋 Juste un petit suivi de mon message d'il y a 2 jours. Un nouvel angle qui pourrait vous intéresser : ${ratingPart ? `avec votre ${ratingPhrase}` : usp ? `"${usp}"` : 'valeur clé'}, ${offerText} pourrait faire une vraie différence pour vos ${audL10n}. Toujours intéressé ?\n{{YOUR_NAME}}`;
         subj = `Suivi pour ${lead.name}`;
         cta = `Toujours intéressé ?`;
       } else if (language === 'ar') {
-        msg = `مرحبا ${lead.name} ! 👋 متابعة بسيطة لرسالتي من قبل يومين. زاوية جديدة قد تهمكم: ${ratingPart ? `بتقييمكم ${ratingPhrase}` : usp ? `"${usp}"` : 'قيمتكم الأساسية'}، ${offerText} يمكن أن يصنع فرقاً حقيقياً لـ ${audience} لديكم. هل ما زلتم مهتمين؟\n{{YOUR_NAME}}`;
+        msg = `مرحبا ${lead.name} ! 👋 متابعة بسيطة لرسالتي من قبل يومين. زاوية جديدة قد تهمكم: ${ratingPart ? `بتقييمكم ${ratingPhrase}` : usp ? `"${usp}"` : 'قيمتكم الأساسية'}، ${offerText} يمكن أن يصنع فرقاً حقيقياً لـ ${audL10n} لديكم. هل ما زلتم مهتمين؟\n{{YOUR_NAME}}`;
         subj = `متابعة لـ ${lead.name}`;
         cta = `هل ما زلتم مهتمين؟`;
       } else {
-        msg = `Hi ${lead.name} ! 👋 Just following up on my message from 2 days ago. One new angle that might interest you: ${ratingPart ? `with your ${ratingPhrase}` : usp ? `"${usp}"` : 'your core value'}, ${offerText} could make a real difference for your ${audience}. Still interested ?\n{{YOUR_NAME}}`;
+        msg = `Hi ${lead.name} ! 👋 Just following up on my message from 2 days ago. One new angle that might interest you: ${ratingPart ? `with your ${ratingPhrase}` : usp ? `"${usp}"` : 'your core value'}, ${offerText} could make a real difference for your ${audL10n}. Still interested ?\n{{YOUR_NAME}}`;
         subj = `Follow-up for ${lead.name}`;
         cta = `Still interested ?`;
       }
     } else if (language === 'fr') {
-      msg = `Bonjour ${lead.name} ! 👋 Félicitations pour votre note de ${ratingPhrase} ! Beaucoup de ${audience} vous cherchent sans vous trouver face à des concurrents plus visibles. Nous proposons ${offerText}. Intéressé par un créneau cette semaine ?\n{{YOUR_NAME}}`;
+      msg = `Bonjour ${lead.name} ! 👋 Félicitations pour votre note de ${ratingPhrase} ! Beaucoup de ${audL10n} vous cherchent sans vous trouver face à des concurrents plus visibles. Nous proposons ${offerText}. Intéressé par un créneau cette semaine ?\n{{YOUR_NAME}}`;
       subj = `Audit gratuit pour ${lead.name}`;
       cta = `Intéressé par un créneau cette semaine ?`;
     } else if (language === 'ar') {
-      msg = `مرحبا ${lead.name} ! 👋 مبروك على تقييم ${ratingPhrase} ! الكثير من ${audience} يبحثون عنكم دون أن يجدوكم بسبب المنافسة. نقترح ${offerText}. هل نحدد موعداً هذا الأسبوع؟\n{{YOUR_NAME}}`;
+      msg = `مرحبا ${lead.name} ! 👋 مبروك على تقييم ${ratingPhrase} ! الكثير من ${audL10n} يبحثون عنكم دون أن يجدوكم بسبب المنافسة. نقترح ${offerText}. هل نحدد موعداً هذا الأسبوع؟\n{{YOUR_NAME}}`;
       subj = `عرض مجاني لـ ${lead.name}`;
       cta = `هل نحدد موعداً هذا الأسبوع؟`;
     } else {
-      msg = `Hi ${lead.name} ! 👋 Congrats on your ${ratingPhrase} ! Many potential ${audience} can't find you while more visible competitors win them over. We offer ${offerText}. Shall we schedule a call this week?\n{{YOUR_NAME}}`;
+      msg = `Hi ${lead.name} ! 👋 Congrats on your ${ratingPhrase} ! Many potential ${audL10n} can't find you while more visible competitors win them over. We offer ${offerText}. Shall we schedule a call this week?\n{{YOUR_NAME}}`;
       subj = `Quick win for ${lead.name}`;
       cta = `Shall we schedule a call this week?`;
     }
-    return { message: msg, subject: subj, cta };
+    const fin = { message: normalizeNewlines(msg), subject: subj, cta };
+    if (language === 'fr' && frEnglishLint(fin.message)) fin.fallbackWarning = 'template quality issue';
+    return fin;
   }
 
   // simple in-memory circuit breaker: if >3 failures in 60s, skip Gemini entirely
@@ -307,10 +344,10 @@ Make sure the JSON is valid and all strings are properly escaped.`;
             // truncated mid-message: extract what we have
             const m2 = cleaned.match(/"message"\s*:\s*"([\s\S]*)/);
             if (m2) {
-              let partial = m2[1].replace(/\n/g, "\n").replace(/\\"/g, '"').replace(/\\\//g, '/');
+              let partial = m2[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\//g, '/');
               // trim trailing incomplete escape
               partial = partial.replace(/\\$/,"").replace(/"\s*[,}]?\s*$/,"");
-              if (partial.length > 20) parsed = { message: partial.slice(0,2000).trim() + (partial.length>10?"...":""), subject: "Outreach — " + (cleaned.match(/"subject"/) ? "" : "Free audit"), cta: "" };
+              if (partial.length > 20) parsed = { message: truncateToSentence(partial.slice(0,2000)), subject: "Outreach — " + (cleaned.match(/"subject"/) ? "" : "Free audit"), cta: "", fallbackWarning: 'truncated' };
             }
           }
           const msgM = cleaned.match(/"message"\s*:\s*"([\s\S]*?)"\s*,\s*"subject"/);
@@ -340,9 +377,10 @@ Make sure the JSON is valid and all strings are properly escaped.`;
 
       // Success
       return json(res, 200, {
-        message: String(parsed.message).trim(),
+        message: normalizeNewlines(String(parsed.message).trim()),
         subject: String(parsed.subject || '').trim(),
         cta: String(parsed.cta || '').trim(),
+        ...(parsed.fallbackWarning ? { fallbackWarning: parsed.fallbackWarning } : {}),
       });
     } catch (e) {
       lastErr = `${model} attempt ${attempt+1}: ${e.message}`;
