@@ -94,6 +94,21 @@ function truncateToSentence(text) {
   return t.replace(/[.\u2026]+$/, '').trim() + ' ...';
 }
 
+// v2.17.1: enforce opening name-greeting + trailing signature placeholder on every provider success
+function signatureGuard(message) {
+  let m = normalizeNewlines(String(message || '').trim());
+  const leadName = ((__ctx && __ctx.lead && __ctx.lead.name) || '').trim();
+  const firstLine = (m.split('\n')[0] || '');
+  if (leadName && /^Bonjour\s*[!!,]/i.test(firstLine)) {
+    m = m.replace(firstLine, 'Bonjour ' + leadName + ' !');
+  }
+  const hadSig = /\{\{YOUR_NAME\}\}\s*$/.test(m);
+  const body = hadSig ? m.replace(/\{\{YOUR_NAME\}\}\s*$/, '').trim() : m;
+  m = truncateToSentence(body);
+  if (hadSig || !m.includes('{{YOUR_NAME}}')) m += '\n\n{{YOUR_NAME}}';
+  return m;
+}
+
 // ---- Multi-AI fallback chain config ----
 const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
 
@@ -140,6 +155,7 @@ BUSINESS CONTEXT:
 OFFER: ${offerText}
 TONE: ${toneText}
 LANGUAGE: ${LANG_INSTRUCTION[language]}
+FORMAT GUARANTEE (non-negotiable): ALWAYS start the message with 'Bonjour ${lead.name} !' and ALWAYS end with '{{YOUR_NAME}}' on its own final line.
 
 ${isFollowup ? `FOLLOW-UP CONTEXT: This is a ${isFinal ? 'FINAL (72h)' : 'GENTLE (48h)'} follow-up to a first message sent ${isFinal ? '~3 days' : '~2 days'} ago that got no reply yet. The recipient already saw the first message.
 CRITICAL MESSAGE RULES (must follow exactly):
@@ -468,7 +484,7 @@ module.exports = async function handler(req, res) {
         }
         console.log(`[outreach] SUCCESS provider=${entry.provider} model=${model} attempts=${attempts} lead=${lead.name}`);
         return json(res, 200, {
-          message: normalizeNewlines(String(out.parsed.message).trim()),
+          message: signatureGuard(out.parsed.message),
           subject: String(out.parsed.subject || '').trim(),
           cta: String(out.parsed.cta || '').trim(),
           provider: entry.provider,
