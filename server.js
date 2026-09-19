@@ -53,7 +53,9 @@ app.get('/api/health', (_req, res) => {
     keys: {
       serpapi: Boolean(process.env.SERPAPI_KEY),
       gemini: Boolean(process.env.GEMINI_API_KEY),
-      jina: Boolean(process.env.JINA_API_KEY)
+      jina: Boolean(process.env.JINA_API_KEY),
+      groq: Boolean(process.env.GROQ_API_KEY),
+      openrouter: Boolean(process.env.OPENROUTER_API_KEY)
     }
   });
 });

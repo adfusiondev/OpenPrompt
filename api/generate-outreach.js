@@ -1,6 +1,7 @@
 // api/generate-outreach.js — Vercel Serverless Function
 // POST { lead, language, tone, offer } → { message, subject, cta }
-// Uses GEMINI_API_KEY (same key as /api/gemini proxy). No new env vars.
+// Multi-AI fallback chain: Gemini → Groq → OpenRouter → static template.
+// Keys: GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY (all server-side, never exposed).
 
 const ALLOWED_ORIGINS = [
   'https://adfusionbot.cloud',
@@ -93,55 +94,38 @@ function truncateToSentence(text) {
   return t.replace(/[.\u2026]+$/, '').trim() + ' ...';
 }
 
-module.exports = async function handler(req, res) {
-  const origin = req.headers.origin || '';
-  cors(res, origin);
+// ---- Multi-AI fallback chain config ----
+const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
 
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-  if (req.method !== 'POST') {
-    return json(res, 405, { error: 'Method not allowed, use POST' });
-  }
+const FALLBACK_CHAIN = [
+  { provider: 'gemini', model: 'gemini-3.6-flash', retries: 2 },
+  { provider: 'gemini', model: 'gemini-2.5-flash', retries: 1 },
+  { provider: 'groq', model: 'qwen/qwen3.8-27b', retries: 2 },
+  { provider: 'openrouter', model: 'meta-llama/llama-3.1-8b-instruct', retries: 2 },
+  { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct', retries: 1 },
+];
 
-  const t0 = Date.now();
-  console.log('[outreach] handler version a1b2c3-followup-v5 circuit+abort+fallback');
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    return json(res, 503, { error: 'GEMINI_API_KEY not configured', code: 'NO_KEY' });
-  }
+const RETRY_DELAYS = [2000, 5000, 10000]; // per-entry retry backoff
+const PROVIDER_KEY = { gemini: 'GEMINI_API_KEY', groq: 'GROQ_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  let body = req.body;
-  if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { return json(res, 400, { error: 'Invalid JSON body' }); }
-  }
-  if (!body || typeof body !== 'object') return json(res, 400, { error: 'Missing JSON body' });
+// Per-request context so getSystemPrompt(language) can build the full spec prompt.
+let __ctx = null;
 
-  const lead = body.lead;
-  const language = body.language;
-  const tone = body.tone;
-  const offer = body.offer;
+function getSystemPrompt(language) {
+  const c = __ctx || {};
+  const lead = c.lead || {};
+  const vertLabel = c.vertLabel || 'local business';
+  const audience = c.audience || 'customers';
+  const ratingStr = c.ratingStr || '';
+  const usp = c.usp || '';
+  const services = c.services || [];
+  const offerText = c.offerText || '';
+  const toneText = c.toneText || '';
+  const isFollowup = c.isFollowup;
+  const isFinal = c.isFinal;
 
-  if (!lead || typeof lead !== 'object') return json(res, 400, { error: 'Missing lead object' });
-  if (!lead.name) return json(res, 400, { error: 'lead.name is required' });
-  if (!['ar','fr','en'].includes(language)) return json(res, 400, { error: 'language must be ar|fr|en' });
-  if (!['friendly','professional','direct'].includes(tone)) return json(res, 400, { error: 'tone must be friendly|professional|direct' });
-  if (!['free_audit','landing_redesign','consultation','followup_gentle','followup_final'].includes(offer)) return json(res, 400, { error: 'offer must be free_audit|landing_redesign|consultation|followup_gentle|followup_final' });
-
-  const vertInfo = (lead.vertical && VERTICAL_LABELS[lead.vertical]) || null;
-  const audience = vertInfo ? vertInfo.audience : 'customers';
-  const vertLabel = vertInfo ? vertInfo.label : (lead.profession || 'local business');
-  const ratingStr = lead.rating ? `${lead.rating}★${lead.reviews ? ` (${lead.reviews} reviews)` : ''}` : '';
-  const usp = (lead.analysis && (lead.analysis.selectedUSP || (lead.analysis.usps && lead.analysis.usps[0]))) || '';
-  const services = (lead.analysis && lead.analysis.services) || [];
-
-  const offerText = (OFFER_MAP[offer] && OFFER_MAP[offer][language]) || OFFER_MAP[offer].en;
-  const toneText = (TONE_MAP[tone] && TONE_MAP[tone][language]) || TONE_MAP[tone].en;
-  const isFollowup = offer === 'followup_gentle' || offer === 'followup_final';
-  const isFinal = offer === 'followup_final';
-
-  // Build system prompt per spec
-  const systemPrompt = `You are an expert WhatsApp direct-response copywriter for local businesses in Morocco.
+  return `You are an expert WhatsApp direct-response copywriter for local businesses in Morocco.
 
 BUSINESS CONTEXT:
 - Name: ${lead.name}
@@ -187,20 +171,212 @@ OUTPUT: Return ONLY valid JSON (no markdown, no code fence) with exactly 3 keys:
   "cta": "the question CTA alone (e.g. Shall we schedule a call?)"
 }
 Make sure the JSON is valid and all strings are properly escaped.`;
+}
 
-  const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
-  const RETRY_DELAYS = [3000, 8000, 15000, 20000]; // per-model exponential backoff (4 retries) + circuit breaker guard
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const USER_PROMPT = 'Generate the WhatsApp outreach message for the business described above, following every rule exactly. Return ONLY valid JSON with exactly the 3 keys: message, subject, cta.';
+
+async function generateWithGroq(prompt, language) {
+  const ac = new AbortController();
+  const tmr = setTimeout(() => ac.abort(), 8000);
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'qwen/qwen3.8-27b',
+        messages: [
+          {role: 'system', content: getSystemPrompt(language)},
+          {role: 'user', content: prompt}
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    });
+    if (!response.ok) throw new Error(`Groq ${response.status}`);
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Groq empty response');
+    return { content, model: 'qwen/qwen3.8-27b' };
+  } finally { clearTimeout(tmr); }
+}
+
+async function generateWithOpenRouter(prompt, language) {
+  const models = ['meta-llama/llama-3.1-8b-instruct', 'meta-llama/llama-3.3-70b-instruct'];
+  const ac = new AbortController();
+  const tmr = setTimeout(() => ac.abort(), 8000);
+  try {
+    for (const model of models) {
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {role: 'system', content: getSystemPrompt(language)},
+              {role: 'user', content: prompt}
+            ],
+            temperature: 0.7
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const content = data?.choices?.[0]?.message?.content;
+          if (content) return { content, model: data?.model || model };
+        }
+      } catch (e) { continue; }
+    }
+    throw new Error('OpenRouter all models failed');
+  } finally { clearTimeout(tmr); }
+}
+
+async function callGemini(model) {
+  const key = process.env.GEMINI_API_KEY;
+  const lang = (__ctx && __ctx.language) || 'fr';
+  const ac = new AbortController();
+  const tmr = setTimeout(() => ac.abort(), 8000);
+  let r;
+  try {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: getSystemPrompt(lang) }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
+      }),
+      signal: ac.signal,
+    });
+  } finally { clearTimeout(tmr); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const t = typeof data === 'string' ? data : JSON.stringify(data || {});
+    const err = new Error(`${model} HTTP ${r.status} — ${t.slice(0, 400)}`);
+    err.status = r.status;
+    err.notAvailable = r.status === 404 || /not found|not available|unsupported|deprecated/i.test(JSON.stringify(data) || '');
+    err.retryable = r.status === 429 || r.status === 503 || r.status === 502 || r.status === 500;
+    throw err;
+  }
+  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+  if (!text) {
+    const err = new Error(`${model}: empty response`);
+    err.retryable = true;
+    throw err;
+  }
+  return text;
+}
+
+// Parse a provider's output into {message, subject, cta} — lenient: strips fences,
+// tries strict JSON, then regex extraction, then truncated-message, then plain text.
+function parseAI(text) {
+  let cleaned = String(text || '').trim();
+  if (!cleaned) return null;
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) {
+      try { parsed = JSON.parse(m[0]); } catch {}
+    }
+  }
+  let fw = '';
+  if (!parsed || !parsed.message) {
+    try {
+      if (cleaned.startsWith('{') && cleaned.includes('"message"') && !cleaned.includes('"subject"')) {
+        const m2 = cleaned.match(/"message"\s*:\s*"([\s\S]*)/);
+        if (m2) {
+          let partial = m2[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\//g, '/');
+          partial = partial.replace(/\\$/, "").replace(/"\s*[,}]?\s*$/, "");
+          if (partial.length > 20) { parsed = { message: truncateToSentence(partial.slice(0, 2000)), subject: 'Outreach', cta: '' }; fw = 'truncated'; }
+        }
+      }
+      const msgM = cleaned.match(/"message"\s*:\s*"([\s\S]*?)"\s*,\s*"subject"/);
+      const subjM = cleaned.match(/"subject"\s*:\s*"([^"]*)"/);
+      const ctaM = cleaned.match(/"cta"\s*:\s*"([^"]*)"/);
+      if (msgM && msgM[1]) {
+        const rawMsg = msgM[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/');
+        parsed = { message: rawMsg, subject: subjM ? subjM[1] : '', cta: ctaM ? ctaM[1] : '' };
+      }
+    } catch {}
+  }
+  if (!parsed || !parsed.message) {
+    if (cleaned.length > 20 && !cleaned.includes('"message"')) {
+      const lines = cleaned.split('\n').map(v => v.trim()).filter(Boolean);
+      const msg = cleaned.replace(/^```[\s\S]*?```/g, '').trim() || String(text).trim();
+      if (msg.length > 20) parsed = { message: msg.slice(0, 2000), subject: lines[0]?.slice(0, 80) || 'Outreach', cta: msg.split('?')[0].split('.').pop()?.trim().slice(0, 120) || '' };
+    }
+  }
+  if (!parsed || !parsed.message) return null;
+  return { parsed, fw };
+}
+
+module.exports = async function handler(req, res) {
+  const origin = req.headers.origin || '';
+  cors(res, origin);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  if (req.method !== 'POST') {
+    return json(res, 405, { error: 'Method not allowed, use POST' });
+  }
+
+  const t0 = Date.now();
+  console.log('[outreach] handler version v2.17-multiai-chain');
+
+  const hasAnyKey = ['GEMINI_API_KEY', 'GROQ_API_KEY', 'OPENROUTER_API_KEY'].some(k => process.env[k]);
+  if (!hasAnyKey) {
+    return json(res, 503, { error: 'No AI provider key configured (GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY)', code: 'NO_KEY' });
+  }
+
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { return json(res, 400, { error: 'Invalid JSON body' }); }
+  }
+  if (!body || typeof body !== 'object') return json(res, 400, { error: 'Missing JSON body' });
+
+  const lead = body.lead;
+  const language = body.language;
+  const tone = body.tone;
+  const offer = body.offer;
+
+  if (!lead || typeof lead !== 'object') return json(res, 400, { error: 'Missing lead object' });
+  if (!lead.name) return json(res, 400, { error: 'lead.name is required' });
+  if (!['ar','fr','en'].includes(language)) return json(res, 400, { error: 'language must be ar|fr|en' });
+  if (!['friendly','professional','direct'].includes(tone)) return json(res, 400, { error: 'tone must be friendly|professional|direct' });
+  if (!['free_audit','landing_redesign','consultation','followup_gentle','followup_final'].includes(offer)) return json(res, 400, { error: 'offer must be free_audit|landing_redesign|consultation|followup_gentle|followup_final' });
+
+  const vertInfo = (lead.vertical && VERTICAL_LABELS[lead.vertical]) || null;
+  const audience = vertInfo ? vertInfo.audience : 'customers';
+  const vertLabel = vertInfo ? vertInfo.label : (lead.profession || 'local business');
+  const ratingStr = lead.rating ? `${lead.rating}★${lead.reviews ? ` (${lead.reviews} reviews)` : ''}` : '';
+  const usp = (lead.analysis && (lead.analysis.selectedUSP || (lead.analysis.usps && lead.analysis.usps[0]))) || '';
+  const services = (lead.analysis && lead.analysis.services) || [];
+
+  const offerText = (OFFER_MAP[offer] && OFFER_MAP[offer][language]) || OFFER_MAP[offer].en;
+  const toneText = (TONE_MAP[tone] && TONE_MAP[tone][language]) || TONE_MAP[tone].en;
+  const isFollowup = offer === 'followup_gentle' || offer === 'followup_final';
+  const isFinal = offer === 'followup_final';
+
+  __ctx = { lead, language, tone, offer, vertInfo, audience, vertLabel, ratingStr, usp, services, offerText, toneText, isFollowup, isFinal };
+
   function staticFallback() {
     const cityPart = lead.city ? (language==='fr' ? ` à ${lead.city}` : language==='ar' ? ` في ${lead.city}` : ` in ${lead.city}`) : '';
     const audL10n = (AUDIENCE_L10N[language] && AUDIENCE_L10N[language][audience]) || audience;
     const ratingPart = lead.rating ? `${lead.rating}★` : '';
     const reviewsPart = lead.reviews ? ` (${lead.reviews} ${language==='fr' ? 'avis' : language==='ar' ? 'تقييم' : 'reviews'})` : '';
     const ratingPhrase = ratingPart ? `${ratingPart}${reviewsPart}${cityPart}` : (usp ? `"${usp}"` : cityPart || vertLabel);
-    // offerText already localized
     let msg, subj, cta;
     if (isFinal) {
-      // 72h final touch: 40-60 words, close-the-loop, door open
       if (language === 'fr') {
         msg = `Bonjour ${lead.name}, juste un dernier petit message pour clôturer la boucle 🙏 Si ce n'est pas le bon moment, je ferme votre dossier pour maintenant — pas de pression. Si jamais vous changez d'avis sur ${offerText}, ma porte reste ouverte. Je clôture votre dossier pour l'instant ?\n{{YOUR_NAME}}`;
         subj = `Dernier message pour ${lead.name}`;
@@ -215,7 +391,6 @@ Make sure the JSON is valid and all strings are properly escaped.`;
         cta = `Should I close your file for now?`;
       }
     } else if (isFollowup) {
-      // 48h gentle: 60-90 words, new angle, light question
       if (language === 'fr') {
         msg = `Bonjour ${lead.name} ! 👋 Juste un petit suivi de mon message d'il y a 2 jours. Un nouvel angle qui pourrait vous intéresser : ${ratingPart ? `avec votre ${ratingPhrase}` : usp ? `"${usp}"` : 'valeur clé'}, ${offerText} pourrait faire une vraie différence pour vos ${audL10n}. Toujours intéressé ?\n{{YOUR_NAME}}`;
         subj = `Suivi pour ${lead.name}`;
@@ -247,153 +422,81 @@ Make sure the JSON is valid and all strings are properly escaped.`;
     return fin;
   }
 
-  // simple in-memory circuit breaker: if >3 failures in 60s, skip Gemini entirely
+  // simple in-memory circuit breaker: if >3 failures in 60s, skip AI entirely
   global.__outreachCB = global.__outreachCB || { fails: [], openUntil: 0 };
   if (Date.now() < global.__outreachCB.openUntil) {
-    console.log('[outreach] circuit open — skipping Gemini, fallback now');
-    const fb = staticFallback(); return json(res, 200, { ...fb, fallback: true, note: 'Gemini unavailable — using template (circuit open)' });
+    console.log('[outreach] circuit open — fallback now');
+    const fb = staticFallback(); return json(res, 200, { ...fb, provider: 'template', model: 'template', fallback: true, attempts: 0, note: 'All AI providers unavailable — using template (circuit open)' });
   }
   let lastErr = '';
-  let lastStatus = 502;
 
+  const GLOBAL_BUDGET = 30000;
+  let attempts = 0;
 
-  for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      console.log(`[outreach] attempt model=${model} try=${attempt+1}/4 lead=${lead.name} lang=${language}`);
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
-      const payload = {
-        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
-      };
-      const ac = new AbortController();
-      const tmr = setTimeout(() => ac.abort(), 7000);
-      let r;
-      try {
-        r = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: ac.signal,
-        });
-      } finally { clearTimeout(tmr); }
-      const data = await r.json().catch(() => ({}));
-
-      if (!r.ok) {
-        const t = typeof data === 'string' ? data : JSON.stringify(data || {});
-        lastErr = `${model} attempt ${attempt+1}: HTTP ${r.status} — ${t.slice(0, 400)}`;
-        lastStatus = r.status;
-        console.log(`[outreach] ${lastErr}`);
-        if (r.status === 503 && data && data.code === 'NO_KEY') {
-          return json(res, 503, { error: 'GEMINI_API_KEY missing', code: 'NO_KEY' });
-        }
-        const isRetryable = r.status === 429 || r.status === 503 || r.status === 502 || r.status === 500;
-        const isFallbackable = r.status === 404 || /not found|not available|unsupported|deprecated/i.test(t);
-        if (isFallbackable) {
-          console.log(`[outreach] model ${model} not available, switching model`);
-          break;
-        }
-        if (isRetryable) global.__outreachCB.fails.push(Date.now());
-        // trim fails older than 60s
-        global.__outreachCB.fails = global.__outreachCB.fails.filter(ts => Date.now() - ts < 60000);
-        if (global.__outreachCB.fails.length >= 5) { global.__outreachCB.openUntil = Date.now() + 30000; console.log('[outreach] circuit tripped 5 fails/60s — open 30s'); }
-        if (isRetryable && attempt < 3) {
-          if (Date.now() - t0 > 8000) { console.log('[outreach] time budget exceeded (8s), using fallback now'); const fb = staticFallback(); return json(res, 200, { ...fb, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); }
-          const d = RETRY_DELAYS[attempt] || 5000;
-          console.log(`[outreach] retryable ${r.status}, waiting ${d}ms before retry`);
-          await sleep(d);
-          continue;
-        }
-        if (isRetryable) {
-          // exhausted retries for this model, try next model
-          console.log(`[outreach] retries exhausted for ${model}, trying next model`);
-          break;
-        }
-        break;
-      }
-
-      // Extract text
-      const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
-      if (!text) {
-        lastErr = `${model} attempt ${attempt+1}: empty response`;
-        console.log(`[outreach] ${lastErr}`);
-        if (attempt < 3) { if (Date.now()-t0>8000) { const fb2 = staticFallback(); return json(res, 200, { ...fb2, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); } await sleep(RETRY_DELAYS[attempt]); continue; }
-        break;
-      }
-
-      // Try to parse JSON from text (strip fences if any)
-      let cleaned = text.trim();
-      if (cleaned.startsWith('```')) {
-        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/,'').trim();
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        const m = cleaned.match(/\{[\s\S]*\}/);
-        if (m) {
-          try { parsed = JSON.parse(m[0]); } catch {}
-        }
-      }
-      // Lenient fallback: extract fields via regex if strict JSON failed (handles unescaped newlines)
-      if (!parsed || !parsed.message) {
-        try {
-          // Handle truncated JSON (message string cut off before closing ")
-          let truncated = false;
-          if (cleaned.startsWith("{") && cleaned.includes("\"message\"") && !cleaned.includes("\"subject\"")) {
-            // truncated mid-message: extract what we have
-            const m2 = cleaned.match(/"message"\s*:\s*"([\s\S]*)/);
-            if (m2) {
-              let partial = m2[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\//g, '/');
-              // trim trailing incomplete escape
-              partial = partial.replace(/\\$/,"").replace(/"\s*[,}]?\s*$/,"");
-              if (partial.length > 20) parsed = { message: truncateToSentence(partial.slice(0,2000)), subject: "Outreach — " + (cleaned.match(/"subject"/) ? "" : "Free audit"), cta: "", fallbackWarning: 'truncated' };
-            }
-          }
-          const msgM = cleaned.match(/"message"\s*:\s*"([\s\S]*?)"\s*,\s*"subject"/);
-          const subjM = cleaned.match(/"subject"\s*:\s*"([^"]*)"/);
-          const ctaM = cleaned.match(/"cta"\s*:\s*"([^"]*)"/);
-          if (msgM && msgM[1]) {
-            // unescape \n and \"
-            const rawMsg = msgM[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\//g, '/');
-            parsed = { message: rawMsg, subject: subjM ? subjM[1] : '', cta: ctaM ? ctaM[1] : '' };
-          }
-        } catch {}
-      }
-      if (!parsed || !parsed.message) {
-        // Ultimate fallback: Gemini returned plain text, treat whole text as message
-        if (cleaned.length > 20 && !cleaned.includes('"message"')) {
-          const lines = cleaned.split('\n').map(v=>v.trim()).filter(Boolean);
-          const msg = cleaned.replace(/^```[\s\S]*?```/g,'').trim() || text.trim();
-          if (msg.length > 20) parsed = { message: msg.slice(0, 2000), subject: lines[0]?.slice(0, 80) || 'Outreach', cta: msg.split('?')[0].split('.').pop()?.trim().slice(0,120) || '' };
-        }
-        if (!parsed || !parsed.message) {
-          lastErr = `${model} attempt ${attempt+1}: could not parse JSON from: ${text.slice(0, 800)}`;
-          console.log(`[outreach] ${lastErr}`);
-          if (attempt < 3) { if (Date.now()-t0>8000) { const fb2 = staticFallback(); return json(res, 200, { ...fb2, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); } await sleep(RETRY_DELAYS[attempt]); continue; }
-          break;
-        }
-      }
-
-      // Success
-      return json(res, 200, {
-        message: normalizeNewlines(String(parsed.message).trim()),
-        subject: String(parsed.subject || '').trim(),
-        cta: String(parsed.cta || '').trim(),
-        ...(parsed.fallbackWarning ? { fallbackWarning: parsed.fallbackWarning } : {}),
-      });
-    } catch (e) {
-      lastErr = `${model} attempt ${attempt+1}: ${e.message}`;
-      lastStatus = 502;
-      console.log(`[outreach] exception ${lastErr}`);
-      if (attempt < 3) { if (Date.now()-t0>8000) { const fb2 = staticFallback(); return json(res, 200, { ...fb2, fallback: true, note: 'Gemini unavailable — using template (time budget)' }); } await sleep(RETRY_DELAYS[attempt]); continue; }
-      break;
+  for (const entry of FALLBACK_CHAIN) {
+    if (!process.env[PROVIDER_KEY[entry.provider]]) {
+      console.log(`[outreach] skip ${entry.provider}/${entry.model} (no ${PROVIDER_KEY[entry.provider]})`);
+      continue;
     }
-    } // end attempt loop
+    for (let a = 0; a < entry.retries; a++) {
+      attempts++;
+      if (Date.now() - t0 > GLOBAL_BUDGET) {
+        console.log('[outreach] global time budget exceeded — using template now');
+        const fb = staticFallback();
+        return json(res, 200, { ...fb, provider: 'template', model: 'template', fallback: true, attempts, note: 'time budget exceeded — using template' });
+      }
+      try {
+        let content, model;
+        if (entry.provider === 'gemini') {
+          content = await callGemini(entry.model);
+          model = entry.model;
+        } else if (entry.provider === 'groq') {
+          const r = await generateWithGroq(USER_PROMPT, language);
+          content = r.content;
+          model = r.model;
+        } else {
+          const r = await generateWithOpenRouter(USER_PROMPT, language);
+          content = r.content;
+          model = r.model;
+        }
+        const out = parseAI(content);
+        if (!out || !out.parsed) {
+          lastErr = `${entry.provider}/${model} attempt ${a+1}: unparseable output`;
+          console.log(`[outreach] ${lastErr}: ${String(content).slice(0, 300)}`);
+          if (a < entry.retries - 1) { await sleep(RETRY_DELAYS[Math.min(a, 2)]); continue; }
+          break;
+        }
+        console.log(`[outreach] SUCCESS provider=${entry.provider} model=${model} attempts=${attempts} lead=${lead.name}`);
+        return json(res, 200, {
+          message: normalizeNewlines(String(out.parsed.message).trim()),
+          subject: String(out.parsed.subject || '').trim(),
+          cta: String(out.parsed.cta || '').trim(),
+          provider: entry.provider,
+          model,
+          fallback: false,
+          ...(out.fw ? { fallbackWarning: out.fw } : {}),
+          attempts,
+        });
+      } catch (e) {
+        lastErr = `${entry.provider}/${entry.model} attempt ${a+1}: ${e.message}`;
+        console.log(`[outreach] ${lastErr}`);
+        if (e && e.notAvailable) {
+          console.log(`[outreach] model ${entry.model} not available, switching provider`);
+          break;
+        }
+        if (e && e.retryable) {
+          global.__outreachCB.fails.push(Date.now());
+          global.__outreachCB.fails = global.__outreachCB.fails.filter(ts => Date.now() - ts < 60000);
+          if (global.__outreachCB.fails.length >= 5) { global.__outreachCB.openUntil = Date.now() + 30000; console.log('[outreach] circuit tripped 5 fails/60s — open 30s'); }
+        }
+        if (a < entry.retries - 1) { await sleep(RETRY_DELAYS[Math.min(a, 2)]); continue; }
+        break;
+      }
+    }
   }
 
-  // All Gemini attempts failed — static fallback (never a raw 503)
+  // All AI providers failed — static template fallback (never a raw 503)
   const fb = staticFallback();
-  console.log(`[outreach] all Gemini models failed (${lastErr}), using static fallback lang=${language} vertical=${lead.vertical || vertLabel}`);
-  return json(res, 200, { ...fb, fallback: true, note: 'Gemini unavailable — using template' });
+  console.log(`[outreach] all providers failed (${lastErr}), attempts=${attempts} — static fallback lang=${language} vertical=${lead.vertical || vertLabel}`);
+  return json(res, 200, { ...fb, provider: 'template', model: 'template', fallback: true, attempts, note: 'All AI providers unavailable — using template' });
 };
