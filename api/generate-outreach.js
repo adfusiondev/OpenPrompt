@@ -3,7 +3,10 @@
 // Uses GEMINI_API_KEY (same key as /api/gemini proxy). No new env vars.
 
 const ALLOWED_ORIGINS = [
+  'https://adfusionbot.cloud',
+  'https://leadgen-hub.vercel.app',
   'https://leadgenhubai.vercel.app',
+  'http://localhost:3000',
   'http://localhost:3002',
 ];
 
